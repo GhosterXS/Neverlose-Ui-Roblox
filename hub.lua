@@ -6,7 +6,21 @@
 
 local REPO_UI = "https://raw.githubusercontent.com/GhosterXS/Neverlose-Ui-Roblox/main/source.luau"
 
-local NeverLose = loadstring(game:HttpGet(REPO_UI))()
+local NeverLose
+do
+    local ok, res = pcall(function()
+        local src = game:HttpGet(REPO_UI)
+        assert(type(src) == "string" and #src > 100, "UI download empty")
+        local fn, err = loadstring(src)
+        assert(fn, tostring(err))
+        return fn()
+    end)
+    if not ok or not res then
+        warn("[Prismora] Failed to load UI:", res)
+        return
+    end
+    NeverLose = res
+end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -149,9 +163,9 @@ local MouseMap = {
     M1B = Enum.UserInputType.MouseButton1,
     M2B = Enum.UserInputType.MouseButton2,
     M3B = Enum.UserInputType.MouseButton3,
-    M4B = Enum.UserInputType.MouseButton4,
-    M5B = Enum.UserInputType.MouseButton5,
 }
+pcall(function() MouseMap.M4B = Enum.UserInputType.MouseButton4 end)
+pcall(function() MouseMap.M5B = Enum.UserInputType.MouseButton5 end)
 
 local function InputMatches(bindKey, input)
     if not bindKey or bindKey == "None" or bindKey == "" then return false end
@@ -342,8 +356,10 @@ do
     gui:Destroy()
 end
 
-local Notification = NeverLose:CreateNotification()
-Notification.new({ Title = "Prismora", Content = "Loaded", Duration = 3 })
+pcall(function()
+    local Notification = NeverLose:CreateNotification()
+    Notification.new({ Title = "Prismora", Content = "Loaded", Duration = 3 })
+end)
 
 local aaConn, spinAngle, jitterSide = nil, 0, 1
 
@@ -1008,21 +1024,35 @@ if charsFolder then
     end)
 end
 
-local Window = NeverLose:CreateWindow({
-    Logo = NeverLose.GlobalLogo,
-    Name = "Prismora",
-    Content = "AA Aimbot ESP",
-    Size = NeverLose.Scales.Default,
-    ConfigFolder = "NeverLoseHub",
-    Enable3DRenderer = false,
-    Keybind = "Insert"
-})
-
-local oldToggle = Window.ToggleInterface
-function Window:ToggleInterface()
-    oldToggle(self)
-    UnlockMouse()
+local Window
+do
+    local ok, win = pcall(function()
+        return NeverLose:CreateWindow({
+            Logo = NeverLose.GlobalLogo,
+            Name = "Prismora",
+            Content = "AA Aimbot ESP",
+            Size = (NeverLose.Scales and NeverLose.Scales.Default) or UDim2.fromOffset(640, 480),
+            ConfigFolder = "PrismoraNL",
+            Enable3DRenderer = false,
+            Keybind = "Insert"
+        })
+    end)
+    if not ok or not win then
+        warn("[Prismora] CreateWindow failed:", win)
+        return
+    end
+    Window = win
 end
+
+pcall(function()
+    local oldToggle = Window.ToggleInterface
+    if typeof(oldToggle) == "function" then
+        function Window:ToggleInterface(...)
+            oldToggle(self, ...)
+            UnlockMouse()
+        end
+    end
+end)
 UnlockMouse()
 
 local function storeKey(name)
