@@ -1,6 +1,5 @@
 --[[
     Neverlose Universal Hub
-    UI: https://raw.githubusercontent.com/GhosterXS/Neverlose-Ui-Roblox/main/source.luau
 ]]
 
 local REPO_UI = "https://raw.githubusercontent.com/GhosterXS/Neverlose-Ui-Roblox/main/source.luau"
@@ -29,6 +28,7 @@ local CoreGui = game:GetService("CoreGui")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
@@ -89,9 +89,10 @@ local Config = {
 
     ThirdPerson = false,
     ThirdPerson_Distance = 10,
-
     LoopFOV = false,
     LoopFOV_Value = 90,
+    Freecam = false,
+    Freecam_Speed = 2,
 
     LocalChams = false,
     LocalChams_Fill = {80, 160, 255},
@@ -99,20 +100,37 @@ local Config = {
     LocalChams_FillTransparency = 0.5,
     LocalChams_OutlineTransparency = 0,
 
-    Freecam = false,
-    Freecam_Speed = 2,
-
     AmbientEnabled = false,
-    AmbientColor = {255, 255, 255},
+    AmbientColor = {128, 128, 128},
     OutdoorAmbient = {128, 128, 128},
     ColorShift_Top = {0, 0, 0},
     ColorShift_Bottom = {0, 0, 0},
+    BloomEnabled = false,
+    BloomIntensity = 0.4,
+    BloomSize = 24,
+    BloomThreshold = 0.95,
+    ColorCorrectionEnabled = false,
+    CC_Brightness = 0,
+    CC_Contrast = 0,
+    CC_Saturation = 0,
+    SunRaysEnabled = false,
+    SunRaysIntensity = 0.1,
+    SunRaysSpread = 0.5,
+    AtmosphereEnabled = false,
+    AtmosphereDensity = 0.3,
+    AtmosphereOffset = 0.25,
+    AtmosphereColor = {199, 199, 199},
+    FogEnabled = false,
+    FogStart = 0,
+    FogEnd = 1000,
+    FogColor = {192, 192, 192},
 
-    Rage_Spinbot = false,
-    Rage_SpinSpeed = 20,
-    Rage_NoRotate = false,
     Rage_AutoFire = false,
-    Rage_RapidFire = false,
+    Rage_KillAura = false,
+    Rage_KillAuraRange = 15,
+
+    Skin_UserId = 0,
+    Skin_Username = "",
 
     Keys = {
         AA = { Key = "None", Mode = "Toggle" },
@@ -125,8 +143,8 @@ local Config = {
         Freecam = { Key = "None", Mode = "Toggle" },
         Ambient = { Key = "None", Mode = "Toggle" },
         Silent = { Key = "None", Mode = "Toggle" },
-        Spinbot = { Key = "None", Mode = "Toggle" },
         AutoFire = { Key = "None", Mode = "Toggle" },
+        KillAura = { Key = "None", Mode = "Toggle" },
     },
 }
 
@@ -173,6 +191,9 @@ local function UnlockMouse()
     pcall(function()
         UserInputService.MouseIconEnabled = true
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        if not Config.Freecam then
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        end
     end)
 end
 
@@ -198,9 +219,7 @@ local function IsBindHeld(bindKey)
         return UserInputService:IsMouseButtonPressed(MouseMap[bindKey])
     end
     local ok, code = pcall(function() return Enum.KeyCode[bindKey] end)
-    if ok and code then
-        return UserInputService:IsKeyDown(code)
-    end
+    if ok and code then return UserInputService:IsKeyDown(code) end
     return false
 end
 
@@ -287,13 +306,9 @@ end
 local function IsLocalAlive()
     local model = GetLocalModel()
     if not model then return false end
-    if model:GetAttribute("Dead") == true then return false end
-    if player:GetAttribute("Dead") == true then return false end
+    if model:GetAttribute("Dead") == true or player:GetAttribute("Dead") == true then return false end
     local hum = model:FindFirstChildOfClass("Humanoid")
-    if hum then
-        if hum.Health <= 0 then return false end
-        if hum:GetState() == Enum.HumanoidStateType.Dead then return false end
-    end
+    if hum and (hum.Health <= 0 or hum:GetState() == Enum.HumanoidStateType.Dead) then return false end
     return true
 end
 
@@ -318,13 +333,11 @@ do
     gui.ResetOnSpawn = false
     pcall(function() gui.Parent = gethui and gethui() or CoreGui end)
     if not gui.Parent then gui.Parent = player:WaitForChild("PlayerGui") end
-
     local bg = Instance.new("Frame")
     bg.Size = UDim2.fromScale(1, 1)
     bg.BackgroundColor3 = Color3.fromRGB(8, 10, 14)
     bg.BorderSizePixel = 0
     bg.Parent = gui
-
     local title = Instance.new("TextLabel")
     title.AnchorPoint = Vector2.new(0.5, 0.5)
     title.Position = UDim2.fromScale(0.5, 0.5)
@@ -336,7 +349,6 @@ do
     title.TextSize = 42
     title.TextTransparency = 1
     title.Parent = bg
-
     local sub = Instance.new("TextLabel")
     sub.AnchorPoint = Vector2.new(0.5, 0)
     sub.Position = UDim2.new(0.5, 0, 0.5, 36)
@@ -348,10 +360,8 @@ do
     sub.TextSize = 14
     sub.TextTransparency = 1
     sub.Parent = bg
-
-    TweenService:Create(title, TweenInfo.new(0.55), { TextTransparency = 0 }):Play()
-    TweenService:Create(sub, TweenInfo.new(0.55), { TextTransparency = 0.2 }):Play()
-
+    TweenService:Create(title, TweenInfo.new(0.5), { TextTransparency = 0 }):Play()
+    TweenService:Create(sub, TweenInfo.new(0.5), { TextTransparency = 0.2 }):Play()
     for i = 1, 16 do
         local line = Instance.new("Frame")
         line.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -362,16 +372,14 @@ do
         line.BorderSizePixel = 0
         line.Parent = bg
         local angle = math.rad((i - 1) * (360 / 16))
-        local dist = 160
-        TweenService:Create(line, TweenInfo.new(0.7, Enum.EasingStyle.Quad), {
+        TweenService:Create(line, TweenInfo.new(0.65, Enum.EasingStyle.Quad), {
             Size = UDim2.fromOffset(2, 70),
-            Position = UDim2.new(0.5, math.cos(angle) * dist, 0.5, math.sin(angle) * dist),
+            Position = UDim2.new(0.5, math.cos(angle) * 160, 0.5, math.sin(angle) * 160),
             BackgroundTransparency = 1,
             Rotation = math.deg(angle) + 90
         }):Play()
     end
-
-    task.wait(1.2)
+    task.wait(1.15)
     TweenService:Create(title, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
     TweenService:Create(sub, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
     TweenService:Create(bg, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
@@ -380,16 +388,82 @@ do
 end
 
 pcall(function()
-    local Notification = NeverLose:CreateNotification()
-    Notification.new({ Title = "Neverlose", Content = "Universal Hub loaded", Duration = 3 })
+    NeverLose:CreateNotification().new({ Title = "Neverlose", Content = "Universal Hub loaded", Duration = 3 })
 end)
 
 local FeatureState = {
     AA = false, Aimbot = false, ESP = false, Bhop = false,
     ThirdPerson = false, LoopFOV = false, LocalChams = false,
     Freecam = false, Ambient = false, Silent = false,
-    Spinbot = false, AutoFire = false,
+    AutoFire = false, KillAura = false,
 }
+
+local LastKeyFeature = nil
+local ModeMenuGui = nil
+
+local function CloseModeMenu()
+    if ModeMenuGui then
+        pcall(function() ModeMenuGui:Destroy() end)
+        ModeMenuGui = nil
+    end
+end
+
+local function OpenModeMenu(featureName, screenPos)
+    CloseModeMenu()
+    local data = Config.Keys[featureName]
+    if not data or not data.Key or data.Key == "None" or data.Key == "" then
+        return
+    end
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "NL_KeyModeMenu"
+    gui.ResetOnSpawn = false
+    gui.DisplayOrder = 10000
+    gui.IgnoreGuiInset = true
+    pcall(function() gui.Parent = gethui and gethui() or CoreGui end)
+    if not gui.Parent then gui.Parent = player:WaitForChild("PlayerGui") end
+    ModeMenuGui = gui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.fromOffset(140, 108)
+    frame.Position = UDim2.fromOffset(
+        math.clamp(screenPos.X, 8, camera.ViewportSize.X - 148),
+        math.clamp(screenPos.Y, 8, camera.ViewportSize.Y - 116)
+    )
+    frame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+    frame.BorderSizePixel = 0
+    frame.Parent = gui
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(50, 50, 60)
+    stroke.Parent = frame
+
+    local modes = {"Toggle", "Hold", "Always"}
+    for i, mode in ipairs(modes) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1, -8, 0, 28)
+        btn.Position = UDim2.fromOffset(4, 6 + (i - 1) * 32)
+        btn.BackgroundColor3 = data.Mode == mode and Color3.fromRGB(40, 80, 140) or Color3.fromRGB(28, 28, 34)
+        btn.Text = mode
+        btn.TextColor3 = Color3.fromRGB(240, 240, 245)
+        btn.Font = Enum.Font.Gotham
+        btn.TextSize = 13
+        btn.BorderSizePixel = 0
+        btn.Parent = frame
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, 4)
+        c.Parent = btn
+        btn.MouseButton1Click:Connect(function()
+            Config.Keys[featureName].Mode = mode
+            if mode == "Always" then
+                FeatureState[featureName] = true
+            end
+            AutoSave()
+            CloseModeMenu()
+        end)
+    end
+end
 
 local aaConn, spinAngle, jitterSide, jitterClock = nil, 0, 1, 0
 
@@ -407,9 +481,7 @@ end
 
 local function StartAA()
     if aaConn then aaConn:Disconnect() end
-    spinAngle = 0
-    jitterSide = 1
-    jitterClock = 0
+    spinAngle, jitterSide, jitterClock = 0, 1, 0
     aaConn = RunService.RenderStepped:Connect(function(dt)
         if not Config.AA_Enabled then return end
         if isShooting() then return end
@@ -419,7 +491,6 @@ local function StartAA()
             hum.AutoRotate = true
             return
         end
-
         if Config.AA_Jitter then
             hum.AutoRotate = false
             jitterClock = jitterClock + dt
@@ -429,24 +500,18 @@ local function StartAA()
             end
             local yaw = math.rad(jitterSide * (Config.AA_JitterAmount or 40))
             local pos = hrp.Position
-            local _, y, _ = hrp.CFrame:ToOrientation()
+            local _, y = hrp.CFrame:ToOrientation()
             hrp.CFrame = CFrame.new(pos) * CFrame.Angles(0, y + yaw, 0)
             return
         end
-
-        if Config.AA_Yaw == "None" and not Config.Rage_Spinbot then
-            if not Config.Rage_NoRotate then
-                hum.AutoRotate = true
-            end
+        if Config.AA_Yaw == "None" then
+            hum.AutoRotate = true
             return
         end
-
         hum.AutoRotate = false
         local pos = hrp.Position
-
-        if Config.Rage_Spinbot or Config.AA_Yaw == "Spin" then
-            local spd = Config.Rage_Spinbot and Config.Rage_SpinSpeed or Config.AA_SpinSpeed
-            spinAngle = (spinAngle + spd * 60 * dt) % 360
+        if Config.AA_Yaw == "Spin" then
+            spinAngle = (spinAngle + Config.AA_SpinSpeed * 60 * dt) % 360
             hrp.CFrame = CFrame.new(pos) * CFrame.Angles(0, math.rad(spinAngle), 0)
         elseif Config.AA_Yaw == "Back" then
             local look = camera.CFrame.LookVector
@@ -454,10 +519,6 @@ local function StartAA()
             if flat.Magnitude > 0.01 then
                 hrp.CFrame = CFrame.new(pos, pos - flat.Unit)
             end
-        end
-
-        if Config.Rage_NoRotate then
-            hum.AutoRotate = false
         end
     end)
 end
@@ -469,28 +530,16 @@ local function StopAA()
 end
 
 local jumpConn = nil
-
 local function StartAutoJump()
     if jumpConn then jumpConn:Disconnect() end
     jumpConn = RunService.Heartbeat:Connect(function()
-        if not Config.AutoJump then return end
-        if not IsLocalAlive() then return end
+        if not Config.AutoJump or not IsLocalAlive() then return end
         local model = GetLocalModel()
         local hum = model and model:FindFirstChildOfClass("Humanoid")
-        if not hum then return end
-        local state = hum:GetState()
-        if state == Enum.HumanoidStateType.Running
-            or state == Enum.HumanoidStateType.RunningNoPhysics
-            or state == Enum.HumanoidStateType.Landed then
-            hum.Jump = true
-        end
-        if player.Character then
-            local h2 = player.Character:FindFirstChildOfClass("Humanoid")
-            if h2 and h2 ~= hum then
-                local s2 = h2:GetState()
-                if s2 == Enum.HumanoidStateType.Running or s2 == Enum.HumanoidStateType.Landed then
-                    h2.Jump = true
-                end
+        if hum then
+            local st = hum:GetState()
+            if st == Enum.HumanoidStateType.Running or st == Enum.HumanoidStateType.RunningNoPhysics or st == Enum.HumanoidStateType.Landed then
+                hum.Jump = true
             end
         end
     end)
@@ -535,13 +584,11 @@ local function StartJumpPowerLoop()
         end
         local model = GetLocalModel()
         apply(model and model:FindFirstChildOfClass("Humanoid"))
-        if player.Character then
-            apply(player.Character:FindFirstChildOfClass("Humanoid"))
-        end
+        if player.Character then apply(player.Character:FindFirstChildOfClass("Humanoid")) end
     end)
 end
 
-local aimConn, fovCircle, silentTarget = nil, nil, nil
+local aimConn, fovCircle = nil, nil
 
 local function CreateFOV()
     if fovCircle then pcall(function() fovCircle:Remove() end) end
@@ -549,7 +596,6 @@ local function CreateFOV()
         fovCircle = Drawing.new("Circle")
         fovCircle.Thickness = 1.5
         fovCircle.NumSides = 64
-        fovCircle.Radius = Config.Aimbot_FOV
         fovCircle.Filled = false
         fovCircle.Visible = false
         fovCircle.Color = Color3.fromRGB(255, 255, 255)
@@ -561,7 +607,6 @@ local function GetClosest()
     local closest, dist = nil, Config.Aimbot_FOV
     local center = camera.ViewportSize / 2
     local localModel = GetLocalModel()
-
     local function checkModel(char, plr)
         if not char or not char:IsA("Model") then return end
         if Config.Aimbot_TeamCheck and plr and IsTeammate(plr) then return end
@@ -576,24 +621,18 @@ local function GetClosest()
         local d = (Vector2.new(screen.X, screen.Y) - center).Magnitude
         if d >= dist then return end
         if not Config.Aimbot_AutoWall then
-            local origin = camera.CFrame.Position
             local params = RaycastParams.new()
             params.FilterDescendantsInstances = { localModel, player.Character }
             params.FilterType = Enum.RaycastFilterType.Exclude
-            local result = workspace:Raycast(origin, part.Position - origin, params)
-            if result and result.Instance and not result.Instance:IsDescendantOf(char) then
-                return
-            end
+            local result = workspace:Raycast(camera.CFrame.Position, part.Position - camera.CFrame.Position, params)
+            if result and result.Instance and not result.Instance:IsDescendantOf(char) then return end
         end
         dist = d
         closest = part
     end
-
     for _, entry in ipairs(CollectTargets()) do
         if entry.Model then checkModel(entry.Model, entry.Plr) end
-        if entry.Char and entry.Char ~= entry.Model then
-            checkModel(entry.Char, entry.Plr)
-        end
+        if entry.Char and entry.Char ~= entry.Model then checkModel(entry.Char, entry.Plr) end
     end
     return closest
 end
@@ -602,20 +641,14 @@ local function MoveMouseToTarget(part)
     local screen, onScreen = camera:WorldToViewportPoint(part.Position)
     if not onScreen or screen.Z <= 0 then return end
     local mousePos = UserInputService:GetMouseLocation()
-    local dx = screen.X - mousePos.X
-    local dy = screen.Y - mousePos.Y
+    local dx, dy = screen.X - mousePos.X, screen.Y - mousePos.Y
     local smooth = math.clamp(tonumber(Config.Aimbot_Smooth) or 0.3, 0.10, 1.00)
-    local div = 1.05 - smooth
-    if div < 0.05 then div = 0.05 end
+    local div = math.max(1.05 - smooth, 0.05)
     if moveMouse then
         moveMouse(dx * div, dy * div)
     else
         pcall(function()
-            VirtualInputManager:SendMouseMoveEvent(
-                mousePos.X + dx * div,
-                mousePos.Y + dy * div,
-                game
-            )
+            VirtualInputManager:SendMouseMoveEvent(mousePos.X + dx * div, mousePos.Y + dy * div, game)
         end)
     end
 end
@@ -625,33 +658,24 @@ local function StartAimbot()
     CreateFOV()
     aimConn = RunService.RenderStepped:Connect(function()
         if fovCircle then
-            local center = camera.ViewportSize / 2
-            fovCircle.Position = center
+            fovCircle.Position = camera.ViewportSize / 2
             fovCircle.Radius = Config.Aimbot_FOV
             fovCircle.Visible = Config.Aimbot_ShowFOV and (Config.Aimbot_Enabled or Config.Aimbot_Silent)
         end
-
         local aimHeld = IsBindHeld(Config.Aimbot_AimKey)
         local wantAim = Config.Aimbot_Enabled and aimHeld
         local wantSilent = Config.Aimbot_Silent
-
-        if not wantAim and not wantSilent then
-            silentTarget = nil
-            return
-        end
-
+        if not wantAim and not wantSilent then return end
         local target = GetClosest()
-        silentTarget = target
-
-        if wantSilent and target then
+        if not target then return end
+        if wantSilent then
             pcall(function()
                 camera.CFrame = CFrame.new(camera.CFrame.Position, target.Position)
             end)
-        elseif wantAim and target then
+        elseif wantAim then
             MoveMouseToTarget(target)
         end
-
-        if Config.Rage_AutoFire and target and aimHeld then
+        if Config.Rage_AutoFire and aimHeld then
             pcall(function()
                 VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
             end)
@@ -667,24 +691,38 @@ end
 local function StopAimbot()
     if aimConn then aimConn:Disconnect() aimConn = nil end
     if fovCircle then fovCircle.Visible = false end
-    silentTarget = nil
 end
 
-local rapidConn = nil
-local function StartRapidFire()
-    if rapidConn then rapidConn:Disconnect() end
-    rapidConn = RunService.Heartbeat:Connect(function()
-        if not Config.Rage_RapidFire then return end
-        if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then return end
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-        end)
+local killAuraConn = nil
+local function StartKillAura()
+    if killAuraConn then killAuraConn:Disconnect() end
+    killAuraConn = RunService.Heartbeat:Connect(function()
+        if not Config.Rage_KillAura then return end
+        local localModel = GetLocalModel()
+        local hrp = localModel and localModel:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        for _, entry in ipairs(CollectTargets()) do
+            local root = entry.Model or entry.Char
+            if not root then continue end
+            local thrp = root:FindFirstChild("HumanoidRootPart") or root:FindFirstChildWhichIsA("BasePart")
+            local hum = root:FindFirstChildOfClass("Humanoid")
+            if thrp and hum and hum.Health > 0 then
+                if (thrp.Position - hrp.Position).Magnitude <= Config.Rage_KillAuraRange then
+                    pcall(function()
+                        hum:TakeDamage(0)
+                    end)
+                    pcall(function()
+                        local tool = localModel:FindFirstChildOfClass("Tool") or (player.Character and player.Character:FindFirstChildOfClass("Tool"))
+                        if tool then tool:Activate() end
+                    end)
+                end
+            end
+        end
     end)
 end
 
-local function StopRapidFire()
-    if rapidConn then rapidConn:Disconnect() rapidConn = nil end
+local function StopKillAura()
+    if killAuraConn then killAuraConn:Disconnect() killAuraConn = nil end
 end
 
 local ESPFolder = Instance.new("Folder")
@@ -706,9 +744,7 @@ local function ClearESP()
     highlights = {}
     for _, d in pairs(drawings) do
         pcall(function()
-            for _, obj in pairs(d) do
-                if obj and obj.Remove then obj:Remove() end
-            end
+            for _, obj in pairs(d) do if obj and obj.Remove then obj:Remove() end end
         end)
     end
     drawings = {}
@@ -719,7 +755,6 @@ local function EnsureHL(store, key, adornee, fill, outline, ft, ot)
     local h = store[key]
     if not h or not h.Parent then
         h = Instance.new("Highlight")
-        h.Name = "ESP_" .. tostring(key)
         h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         h.Parent = ESPFolder
         store[key] = h
@@ -733,39 +768,24 @@ local function EnsureHL(store, key, adornee, fill, outline, ft, ot)
 end
 
 local function RefreshChams()
-    local enemyFill = ToColor3(Config.ESP_FillColor)
-    local enemyOutline = ToColor3(Config.ESP_OutlineColor)
-    local teamFill = ToColor3(Config.ESP_TeamFillColor)
-    local teamOutline = ToColor3(Config.ESP_TeamOutlineColor)
+    local enemyFill, enemyOutline = ToColor3(Config.ESP_FillColor), ToColor3(Config.ESP_OutlineColor)
+    local teamFill, teamOutline = ToColor3(Config.ESP_TeamFillColor), ToColor3(Config.ESP_TeamOutlineColor)
     local seenLocal, seenP = {}, {}
-
     if Config.LocalChams then
         local model, char = GetLocalModel(), player.Character
         local fill, outline = ToColor3(Config.LocalChams_Fill), ToColor3(Config.LocalChams_Outline)
         local ft, ot = Config.LocalChams_FillTransparency, Config.LocalChams_OutlineTransparency
-        if model then
-            EnsureHL(localHighlights, "lm", model, fill, outline, ft, ot)
-            seenLocal.lm = true
-        end
-        if char and char ~= model then
-            EnsureHL(localHighlights, "lc", char, fill, outline, ft, ot)
-            seenLocal.lc = true
-        end
+        if model then EnsureHL(localHighlights, "lm", model, fill, outline, ft, ot) seenLocal.lm = true end
+        if char and char ~= model then EnsureHL(localHighlights, "lc", char, fill, outline, ft, ot) seenLocal.lc = true end
     end
     for k, h in pairs(localHighlights) do
-        if not Config.LocalChams or not seenLocal[k] then
-            pcall(function() h:Destroy() end)
-            localHighlights[k] = nil
-        end
+        if not Config.LocalChams or not seenLocal[k] then pcall(function() h:Destroy() end) localHighlights[k] = nil end
     end
-
     if Config.ESP_Enabled and (Config.ESP_Chams or Config.ESP_Highlight) then
         for _, entry in ipairs(CollectTargets()) do
             local plr = entry.Plr
             local isTeam = IsTeammate(plr)
-            if isTeam and Config.ESP_TeamCheck and not Config.ESP_TeamChams then
-                -- skip
-            else
+            if not (isTeam and Config.ESP_TeamCheck and not Config.ESP_TeamChams) then
                 local fill = isTeam and teamFill or enemyFill
                 local outline = isTeam and teamOutline or enemyOutline
                 local ft, ot = Config.ESP_FillTransparency, Config.ESP_OutlineTransparency
@@ -783,18 +803,12 @@ local function RefreshChams()
         end
     end
     for key, h in pairs(highlights) do
-        if not seenP[key] then
-            pcall(function() h:Destroy() end)
-            highlights[key] = nil
-        end
+        if not seenP[key] then pcall(function() h:Destroy() end) highlights[key] = nil end
     end
 end
 
 task.spawn(function()
-    while true do
-        pcall(RefreshChams)
-        task.wait(5)
-    end
+    while true do pcall(RefreshChams) task.wait(5) end
 end)
 
 local function OffsetPos(base, side, amount)
@@ -808,60 +822,37 @@ end
 
 local function UpdateESPDrawings()
     if not Config.ESP_Enabled then
-        for _, d in pairs(drawings) do
-            for _, obj in pairs(d) do
-                if obj then obj.Visible = false end
-            end
-        end
+        for _, d in pairs(drawings) do for _, o in pairs(d) do if o then o.Visible = false end end end
         return
     end
-
-    local nameColor = ToColor3(Config.ESP_NameColor)
-    local distColor = ToColor3(Config.ESP_DistColor)
-    local tracerColor = ToColor3(Config.ESP_TracerColor)
-    local ballColor = ToColor3(Config.ESP_BallColor)
-    local maxDist = Config.ESP_MaxDistance
+    local nameColor, distColor = ToColor3(Config.ESP_NameColor), ToColor3(Config.ESP_DistColor)
+    local tracerColor, ballColor = ToColor3(Config.ESP_TracerColor), ToColor3(Config.ESP_BallColor)
     local seen = {}
-
     for _, entry in ipairs(CollectTargets()) do
         local plr = entry.Plr
         if Config.ESP_TeamCheck and IsTeammate(plr) then
-            -- skip enemy-only when teamcheck
+            -- skip
         else
             local model = entry.Model or entry.Char
             if model then
-                local hrp = model:FindFirstChild("HumanoidRootPart")
-                    or model:FindFirstChild("Torso")
-                    or model:FindFirstChild("UpperTorso")
-                    or model:FindFirstChildWhichIsA("BasePart")
+                local hrp = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Torso") or model:FindFirstChild("UpperTorso") or model:FindFirstChildWhichIsA("BasePart")
                 local head = model:FindFirstChild("Head") or hrp
                 local hum = model:FindFirstChildOfClass("Humanoid")
                 if hrp then
                     local dist = (hrp.Position - camera.CFrame.Position).Magnitude
-                    if dist <= maxDist then
+                    if dist <= Config.ESP_MaxDistance then
                         local uid = plr.UserId
                         seen[uid] = true
                         if not drawings[uid] then
                             drawings[uid] = {
-                                Name = CreateDrawing("Text"),
-                                Dist = CreateDrawing("Text"),
-                                HealthBg = CreateDrawing("Square"),
-                                Health = CreateDrawing("Square"),
-                                Tracer = CreateDrawing("Line"),
-                                Ball = CreateDrawing("Circle"),
+                                Name = CreateDrawing("Text"), Dist = CreateDrawing("Text"),
+                                HealthBg = CreateDrawing("Square"), Health = CreateDrawing("Square"),
+                                Tracer = CreateDrawing("Line"), Ball = CreateDrawing("Circle"),
                             }
                         end
                         local d = drawings[uid]
                         local screen, onScreen = camera:WorldToViewportPoint(hrp.Position)
                         local screenPos = Vector2.new(screen.X, screen.Y)
-                        if not onScreen or screen.Z <= 0 then
-                            local viewport = camera.ViewportSize
-                            screenPos = Vector2.new(
-                                math.clamp(screen.X, 20, viewport.X - 20),
-                                math.clamp(screen.Y, 20, viewport.Y - 20)
-                            )
-                        end
-
                         if d.Ball and Config.ESP_Ball then
                             d.Ball.Position = screenPos
                             d.Ball.Radius = Config.ESP_BallSize
@@ -869,10 +860,7 @@ local function UpdateESPDrawings()
                             d.Ball.Filled = true
                             d.Ball.NumSides = 16
                             d.Ball.Visible = true
-                        elseif d.Ball then
-                            d.Ball.Visible = false
-                        end
-
+                        elseif d.Ball then d.Ball.Visible = false end
                         if d.Name then
                             d.Name.Text = plr.DisplayName or plr.Name
                             d.Name.Size = Config.ESP_NameSize
@@ -883,7 +871,6 @@ local function UpdateESPDrawings()
                             d.Name.Position = OffsetPos(screenPos, Config.ESP_NamePos, Config.ESP_BallSize + 16)
                             d.Name.Visible = Config.ESP_Name
                         end
-
                         if d.Dist then
                             d.Dist.Text = math.floor(dist) .. "m"
                             d.Dist.Size = Config.ESP_DistSize
@@ -894,25 +881,14 @@ local function UpdateESPDrawings()
                             d.Dist.Position = OffsetPos(screenPos, Config.ESP_DistPos, Config.ESP_BallSize + 4)
                             d.Dist.Visible = Config.ESP_Distance
                         end
-
-                        if onScreen and screen.Z > 0 and d.HealthBg and d.Health and hum then
+                        if onScreen and screen.Z > 0 and d.Health and hum then
                             local headScreen = camera:WorldToViewportPoint((head and head.Position or hrp.Position) + Vector3.new(0, 0.9, 0))
                             local hp = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
                             local barH, barW = Config.ESP_HealthHeight, Config.ESP_HealthWidth
-                            local bx, by = headScreen.X, headScreen.Y
-                            if Config.ESP_HealthPos == "Left" then
-                                bx = headScreen.X - 34
-                                by = headScreen.Y - 14
-                            elseif Config.ESP_HealthPos == "Right" then
-                                bx = headScreen.X + 28
-                                by = headScreen.Y - 14
-                            elseif Config.ESP_HealthPos == "Up" then
-                                bx = headScreen.X - barW / 2
-                                by = headScreen.Y - barH - 8
-                            else
-                                bx = headScreen.X - barW / 2
-                                by = headScreen.Y + 8
-                            end
+                            local bx, by = headScreen.X - 34, headScreen.Y - 14
+                            if Config.ESP_HealthPos == "Right" then bx = headScreen.X + 28
+                            elseif Config.ESP_HealthPos == "Up" then bx = headScreen.X - barW / 2 by = headScreen.Y - barH - 8
+                            elseif Config.ESP_HealthPos == "Bottom" then bx = headScreen.X - barW / 2 by = headScreen.Y + 8 end
                             d.HealthBg.Size = Vector2.new(barW, barH)
                             d.HealthBg.Position = Vector2.new(bx, by)
                             d.HealthBg.Color = Color3.fromRGB(15, 15, 15)
@@ -927,50 +903,35 @@ local function UpdateESPDrawings()
                             if d.Health then d.Health.Visible = false end
                             if d.HealthBg then d.HealthBg.Visible = false end
                         end
-
                         if d.Tracer and onScreen and screen.Z > 0 then
                             d.Tracer.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
                             d.Tracer.To = screenPos
                             d.Tracer.Color = tracerColor
                             d.Tracer.Thickness = 1.3
                             d.Tracer.Visible = Config.ESP_Tracers
-                        elseif d.Tracer then
-                            d.Tracer.Visible = false
-                        end
+                        elseif d.Tracer then d.Tracer.Visible = false end
                     end
                 end
             end
         end
     end
-
     for uid, d in pairs(drawings) do
         if not seen[uid] then
-            pcall(function()
-                for _, obj in pairs(d) do
-                    if obj and obj.Remove then obj:Remove() end
-                end
-            end)
+            pcall(function() for _, o in pairs(d) do if o and o.Remove then o:Remove() end end end)
             drawings[uid] = nil
         end
     end
 end
 
 local thirdConn, savedZoom = nil, nil
-
 local function StartThirdPerson()
     if thirdConn then thirdConn:Disconnect() end
     pcall(function()
-        savedZoom = {
-            min = player.CameraMinZoomDistance,
-            max = player.CameraMaxZoomDistance,
-        }
+        savedZoom = { min = player.CameraMinZoomDistance, max = player.CameraMaxZoomDistance }
         player.CameraMinZoomDistance = Config.ThirdPerson_Distance
         player.CameraMaxZoomDistance = Config.ThirdPerson_Distance
     end)
     camera.CameraType = Enum.CameraType.Custom
-    local model = GetLocalModel()
-    local hum = model and model:FindFirstChildOfClass("Humanoid")
-    if hum then camera.CameraSubject = hum end
     thirdConn = RunService.RenderStepped:Connect(function()
         if not Config.ThirdPerson or Config.Freecam then return end
         ForceLocalVisible()
@@ -980,14 +941,10 @@ local function StartThirdPerson()
         end)
         local model = GetLocalModel()
         local hum = model and model:FindFirstChildOfClass("Humanoid")
-        if hum and camera.CameraSubject ~= hum then
+        if hum then
             camera.CameraType = Enum.CameraType.Custom
             camera.CameraSubject = hum
-        end
-        if hum then
-            pcall(function()
-                hum.CameraOffset = Vector3.new(0, 1, 0)
-            end)
+            pcall(function() hum.CameraOffset = Vector3.new(0, 1, 0) end)
         end
     end)
 end
@@ -998,9 +955,6 @@ local function StopThirdPerson()
         if savedZoom then
             player.CameraMinZoomDistance = savedZoom.min or 0.5
             player.CameraMaxZoomDistance = savedZoom.max or 128
-        else
-            player.CameraMinZoomDistance = 0.5
-            player.CameraMaxZoomDistance = 128
         end
     end)
     if not Config.Freecam then
@@ -1014,16 +968,13 @@ local function StopThirdPerson()
     end
 end
 
-local fovConn = nil
-local defaultFOV = 70
+local fovConn, defaultFOV = nil, 70
 pcall(function() defaultFOV = camera.FieldOfView end)
 
 local function StartLoopFOV()
     if fovConn then fovConn:Disconnect() end
     fovConn = RunService.RenderStepped:Connect(function()
-        if Config.LoopFOV then
-            camera.FieldOfView = Config.LoopFOV_Value
-        end
+        if Config.LoopFOV then camera.FieldOfView = Config.LoopFOV_Value end
     end)
 end
 
@@ -1032,9 +983,7 @@ local function StopLoopFOV()
     camera.FieldOfView = defaultFOV
 end
 
-local freecamConn = nil
-local freecamYaw, freecamPitch = 0, 0
-local moveKeys = {}
+local freecamConn, freecamYaw, freecamPitch, moveKeys = nil, 0, 0, {}
 
 local function StartFreecam()
     if freecamConn then return end
@@ -1075,29 +1024,172 @@ local function StopFreecam()
     if Config.ThirdPerson then StartThirdPerson() end
 end
 
+local function EnsureEffect(className, name)
+    local e = Lighting:FindFirstChild(name)
+    if not e then
+        e = Instance.new(className)
+        e.Name = name
+        e.Parent = Lighting
+    end
+    return e
+end
+
 local savedLighting = {
     Ambient = Lighting.Ambient,
     OutdoorAmbient = Lighting.OutdoorAmbient,
     ColorShift_Top = Lighting.ColorShift_Top,
     ColorShift_Bottom = Lighting.ColorShift_Bottom,
+    FogStart = Lighting.FogStart,
+    FogEnd = Lighting.FogEnd,
+    FogColor = Lighting.FogColor,
 }
 
-local function ApplyAmbient()
-    if not Config.AmbientEnabled then
+local function ApplyWorld()
+    if Config.AmbientEnabled then
+        Lighting.Ambient = ToColor3(Config.AmbientColor)
+        Lighting.OutdoorAmbient = ToColor3(Config.OutdoorAmbient)
+        Lighting.ColorShift_Top = ToColor3(Config.ColorShift_Top)
+        Lighting.ColorShift_Bottom = ToColor3(Config.ColorShift_Bottom)
+    else
         Lighting.Ambient = savedLighting.Ambient
         Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
         Lighting.ColorShift_Top = savedLighting.ColorShift_Top
         Lighting.ColorShift_Bottom = savedLighting.ColorShift_Bottom
-        return
     end
-    Lighting.Ambient = ToColor3(Config.AmbientColor)
-    Lighting.OutdoorAmbient = ToColor3(Config.OutdoorAmbient)
-    Lighting.ColorShift_Top = ToColor3(Config.ColorShift_Top)
-    Lighting.ColorShift_Bottom = ToColor3(Config.ColorShift_Bottom)
+
+    local bloom = EnsureEffect("BloomEffect", "NL_Bloom")
+    bloom.Enabled = Config.BloomEnabled
+    bloom.Intensity = Config.BloomIntensity
+    bloom.Size = Config.BloomSize
+    bloom.Threshold = Config.BloomThreshold
+
+    local cc = EnsureEffect("ColorCorrectionEffect", "NL_CC")
+    cc.Enabled = Config.ColorCorrectionEnabled
+    cc.Brightness = Config.CC_Brightness
+    cc.Contrast = Config.CC_Contrast
+    cc.Saturation = Config.CC_Saturation
+
+    local rays = EnsureEffect("SunRaysEffect", "NL_SunRays")
+    rays.Enabled = Config.SunRaysEnabled
+    rays.Intensity = Config.SunRaysIntensity
+    rays.Spread = Config.SunRaysSpread
+
+    local atmo = Lighting:FindFirstChildOfClass("Atmosphere")
+    if Config.AtmosphereEnabled then
+        if not atmo then
+            atmo = Instance.new("Atmosphere")
+            atmo.Name = "NL_Atmosphere"
+            atmo.Parent = Lighting
+        end
+        atmo.Density = Config.AtmosphereDensity
+        atmo.Offset = Config.AtmosphereOffset
+        atmo.Color = ToColor3(Config.AtmosphereColor)
+    elseif atmo and atmo.Name == "NL_Atmosphere" then
+        atmo:Destroy()
+    end
+
+    if Config.FogEnabled then
+        Lighting.FogStart = Config.FogStart
+        Lighting.FogEnd = Config.FogEnd
+        Lighting.FogColor = ToColor3(Config.FogColor)
+    else
+        Lighting.FogStart = savedLighting.FogStart
+        Lighting.FogEnd = savedLighting.FogEnd
+        Lighting.FogColor = savedLighting.FogColor
+    end
+end
+
+local function ApplySkinToModel(model, description)
+    if not model then return end
+    local hum = model:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    pcall(function()
+        hum:ApplyDescriptionClientServer(description)
+    end)
+    pcall(function()
+        hum:ApplyDescription(description)
+    end)
+    pcall(function()
+        local clone = description:Clone()
+        hum:ApplyDescriptionReset(clone)
+    end)
+end
+
+local function ApplySkinChanger(userId)
+    userId = tonumber(userId)
+    if not userId or userId <= 0 then return false, "Invalid user id" end
+    local ok, desc = pcall(function()
+        return Players:GetHumanoidDescriptionFromUserId(userId)
+    end)
+    if not ok or not desc then return false, tostring(desc) end
+
+    local applied = false
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            local ok2 = pcall(function() hum:ApplyDescription(desc) end)
+            if not ok2 then
+                pcall(function()
+                    local appearance = Players:GetCharacterAppearanceInfoAsync(userId)
+                end)
+                pcall(function()
+                    char.Parent = nil
+                    local newModel = Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+                    if newModel then
+                        newModel.Name = char.Name
+                        newModel.Parent = workspace
+                    end
+                end)
+            end
+            applied = true
+        end
+    end
+
+    local model = GetLocalModel()
+    if model and model ~= char then
+        local hum = model:FindFirstChildOfClass("Humanoid")
+        if hum then
+            pcall(function() hum:ApplyDescription(desc) end)
+            applied = true
+        end
+    end
+
+    -- visual bodycolors / clothing fallback
+    pcall(function()
+        local target = model or char
+        if not target then return end
+        for _, item in ipairs(target:GetChildren()) do
+            if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") then
+                item:Destroy()
+            end
+        end
+        if desc.Shirt > 0 then
+            local s = Instance.new("Shirt")
+            s.ShirtTemplate = "rbxassetid://" .. tostring(desc.Shirt)
+            s.Parent = target
+        end
+        if desc.Pants > 0 then
+            local p = Instance.new("Pants")
+            p.PantsTemplate = "rbxassetid://" .. tostring(desc.Pants)
+            p.Parent = target
+        end
+    end)
+
+    return applied, applied and "Applied" or "Failed"
+end
+
+local function ResolveUsernameToId(name)
+    local ok, id = pcall(function()
+        return Players:GetUserIdFromNameAsync(name)
+    end)
+    if ok then return id end
+    return nil
 end
 
 local function ApplyFeature(name, on)
-    FeatureState[name] = on and true or false
+    on = on and true or false
+    FeatureState[name] = on
     if name == "AA" then
         Config.AA_Enabled = on
         if on then StartAA() else StopAA() end
@@ -1128,34 +1220,23 @@ local function ApplyFeature(name, on)
         if on then StartFreecam() else StopFreecam() end
     elseif name == "Ambient" then
         Config.AmbientEnabled = on
-        ApplyAmbient()
-    elseif name == "Spinbot" then
-        Config.Rage_Spinbot = on
-        if on then
-            Config.AA_Enabled = true
-            FeatureState.AA = true
-            StartAA()
-        end
+        ApplyWorld()
     elseif name == "AutoFire" then
         Config.Rage_AutoFire = on
+        if on and not (Config.Aimbot_Enabled or Config.Aimbot_Silent) then
+            StartAimbot()
+        end
+    elseif name == "KillAura" then
+        Config.Rage_KillAura = on
+        if on then StartKillAura() else StopKillAura() end
     end
     AutoSave()
 end
 
-local function IsFeatureActive(name)
-    local data = Config.Keys[name]
-    if data and data.Mode == "Always" then
-        return true
-    end
-    return FeatureState[name] == true
-end
-
 RunService.Heartbeat:Connect(function()
     for name, data in pairs(Config.Keys) do
-        if data.Mode == "Always" then
-            if not FeatureState[name] then
-                ApplyFeature(name, true)
-            end
+        if data.Mode == "Always" and not FeatureState[name] then
+            ApplyFeature(name, true)
         end
     end
 end)
@@ -1169,11 +1250,16 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     if input.KeyCode == Enum.KeyCode.Q then moveKeys.Q = true end
     if input.KeyCode == Enum.KeyCode.LeftShift then moveKeys.Shift = true end
 
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and not gpe then
+        if LastKeyFeature and Config.Keys[LastKeyFeature] and Config.Keys[LastKeyFeature].Key ~= "None" then
+            local pos = UserInputService:GetMouseLocation()
+            OpenModeMenu(LastKeyFeature, pos)
+        end
+    end
+
     if gpe then return end
     for name, data in pairs(Config.Keys) do
-        if data.Mode == "Always" then
-            -- always on via heartbeat
-        elseif InputMatches(data.Key, input) then
+        if data.Mode ~= "Always" and InputMatches(data.Key, input) then
             if data.Mode == "Toggle" then
                 ApplyFeature(name, not FeatureState[name])
             else
@@ -1191,7 +1277,6 @@ UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.E then moveKeys.E = false end
     if input.KeyCode == Enum.KeyCode.Q then moveKeys.Q = false end
     if input.KeyCode == Enum.KeyCode.LeftShift then moveKeys.Shift = false end
-
     for name, data in pairs(Config.Keys) do
         if data.Mode == "Hold" and InputMatches(data.Key, input) then
             ApplyFeature(name, false)
@@ -1204,17 +1289,26 @@ RunService.RenderStepped:Connect(function()
     if Config.ThirdPerson or Config.Freecam then ForceLocalVisible() end
 end)
 
+-- unlock mouse while menu likely open (Insert toggles UI)
+local menuOpenHint = true
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Insert then
+        task.defer(UnlockMouse)
+        menuOpenHint = true
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if menuOpenHint and not Config.Freecam then
+        UnlockMouse()
+    end
+end)
+
 local charsFolder = GetCharactersFolder()
 if charsFolder then
-    charsFolder.ChildAdded:Connect(function()
-        task.wait(0.2)
-        RefreshChams()
-    end)
+    charsFolder.ChildAdded:Connect(function() task.wait(0.2) RefreshChams() end)
 end
-Players.PlayerAdded:Connect(function()
-    task.wait(0.3)
-    RefreshChams()
-end)
+Players.PlayerAdded:Connect(function() task.wait(0.3) RefreshChams() end)
 
 local Window
 do
@@ -1223,7 +1317,7 @@ do
             Logo = NeverLose.GlobalLogo,
             Name = "Neverlose",
             Content = "Universal Hub",
-            Size = (NeverLose.Scales and NeverLose.Scales.Default) or UDim2.fromOffset(640, 480),
+            Size = (NeverLose.Scales and NeverLose.Scales.Default) or UDim2.fromOffset(700, 520),
             ConfigFolder = "NeverloseNL",
             Enable3DRenderer = false,
             Keybind = "Insert"
@@ -1242,6 +1336,8 @@ pcall(function()
         function Window:ToggleInterface(...)
             oldToggle(self, ...)
             UnlockMouse()
+            menuOpenHint = true
+            task.defer(UnlockMouse)
         end
     end
 end)
@@ -1251,6 +1347,7 @@ local function storeKey(name)
     return function(v)
         if type(v) == "string" and v ~= "" and v ~= "None" then
             Config.Keys[name].Key = v
+            LastKeyFeature = name
         else
             Config.Keys[name].Key = "None"
         end
@@ -1262,74 +1359,48 @@ local function bindFeature(label, name, defaultOn, flag)
     label:AddToggle({
         Default = defaultOn,
         Flag = flag,
-        Callback = function(v)
-            ApplyFeature(name, v)
-        end
+        Callback = function(v) ApplyFeature(name, v) end
     })
-    local kb = label:AddKeybind({
+    label:AddKeybind({
         Default = Config.Keys[name].Key ~= "None" and Config.Keys[name].Key or nil,
         Flag = flag .. "_Key",
-        Callback = storeKey(name)
+        Callback = function(v)
+            storeKey(name)(v)
+            LastKeyFeature = name
+        end
     })
-    pcall(function()
-        local opt = label:AddOption()
-        opt:AddLabel("Key Mode"):AddDropdown({
-            Default = Config.Keys[name].Mode,
-            Values = {"Toggle", "Hold", "Always"},
-            Flag = flag .. "_Mode",
-            Callback = function(v)
-                Config.Keys[name].Mode = v
-                if v == "Always" then
-                    ApplyFeature(name, true)
-                end
-                AutoSave()
-            end
-        })
-    end)
-    return kb
 end
 
-Window:AddTabLabel("COMBAT")
-local Rage = Window:AddTab({ Icon = "crosshairs", Name = "Combat" })
+Window:AddTabLabel("MAIN")
+local RageTab = Window:AddTab({ Icon = "swords", Name = "Rage" })
+local LegitTab = Window:AddTab({ Icon = "crosshairs", Name = "Legit" })
+local AATab = Window:AddTab({ Icon = "reload", Name = "Anti-Aim" })
 local Visuals = Window:AddTab({ Icon = "eye", Name = "Visuals" })
 local MoveTab = Window:AddTab({ Icon = "person", Name = "Movement" })
+local MiscTab = Window:AddTab({ Icon = "cube", Name = "Misc" })
 local WorldTab = Window:AddTab({ Icon = "globe", Name = "World" })
+local SkinTab = Window:AddTab({ Icon = "user", Name = "Skins" })
 
-local AASec = Rage:AddSection({ Name = "ANTI-AIM", Position = "left" })
-local AimSec = Rage:AddSection({ Name = "AIMBOT", Position = "right" })
-local RageSec = Rage:AddSection({ Name = "RAGE", Position = "left" })
+local RageSec = RageTab:AddSection({ Name = "RAGE", Position = "left" })
+local AimSec = LegitTab:AddSection({ Name = "AIMBOT", Position = "left" })
+local SilentSec = LegitTab:AddSection({ Name = "SILENT", Position = "right" })
+local AASec = AATab:AddSection({ Name = "ANTI-AIM", Position = "left" })
 local ESPSec = Visuals:AddSection({ Name = "ESP", Position = "left" })
 local ESPStyle = Visuals:AddSection({ Name = "ESP STYLE", Position = "right" })
 local LocalSec = Visuals:AddSection({ Name = "LOCAL", Position = "right" })
 local MoveSec = MoveTab:AddSection({ Name = "MOVEMENT", Position = "left" })
-local CamSec = MoveTab:AddSection({ Name = "CAMERA", Position = "right" })
-local EnvSec = WorldTab:AddSection({ Name = "ENVIRONMENT", Position = "left" })
+local CamSec = MiscTab:AddSection({ Name = "CAMERA", Position = "left" })
+local EnvSec = WorldTab:AddSection({ Name = "LIGHTING", Position = "left" })
+local FxSec = WorldTab:AddSection({ Name = "EFFECTS", Position = "right" })
+local SkinSec = SkinTab:AddSection({ Name = "SKIN CHANGER", Position = "left" })
 
-local aaLabel = AASec:AddLabel("Enabled")
-bindFeature(aaLabel, "AA", Config.AA_Enabled, "AA_Enabled")
-AASec:AddLabel("Disable When Sitting"):AddToggle({
-    Default = Config.AA_DisableWhenSitting, Flag = "AA_Sit",
-    Callback = function(v) Config.AA_DisableWhenSitting = v AutoSave() end
-})
-AASec:AddLabel("Yaw Mode"):AddDropdown({
-    Default = Config.AA_Yaw, Values = {"None", "Back", "Spin"}, Flag = "AA_Yaw",
-    Callback = function(v) Config.AA_Yaw = v AutoSave() end
-})
-AASec:AddLabel("Jitter"):AddToggle({
-    Default = Config.AA_Jitter, Flag = "AA_Jitter",
-    Callback = function(v)
-        Config.AA_Jitter = v
-        if v and Config.AA_Enabled then StartAA() end
-        AutoSave()
-    end
-})
-AASec:AddLabel("Spin Speed"):AddSlider({
-    Min = 1, Max = 40, Default = Config.AA_SpinSpeed, Flag = "AA_SpinSpeed",
-    Callback = function(v) Config.AA_SpinSpeed = v AutoSave() end
-})
-AASec:AddLabel("Jitter Amount"):AddSlider({
-    Min = 5, Max = 90, Default = Config.AA_JitterAmount, Flag = "AA_JitterAmount",
-    Callback = function(v) Config.AA_JitterAmount = v AutoSave() end
+local afLabel = RageSec:AddLabel("Auto Fire")
+bindFeature(afLabel, "AutoFire", Config.Rage_AutoFire, "Rage_AutoFire")
+local kaLabel = RageSec:AddLabel("Kill Aura")
+bindFeature(kaLabel, "KillAura", Config.Rage_KillAura, "Rage_KillAura")
+RageSec:AddLabel("Kill Aura Range"):AddSlider({
+    Min = 5, Max = 50, Default = Config.Rage_KillAuraRange, Flag = "KA_Range",
+    Callback = function(v) Config.Rage_KillAuraRange = v AutoSave() end
 })
 
 local aimLabel = AimSec:AddLabel("Enabled")
@@ -1342,8 +1413,6 @@ AimSec:AddLabel("Aim Key"):AddKeybind({
         AutoSave()
     end
 })
-local silentLabel = AimSec:AddLabel("Silent Aim")
-bindFeature(silentLabel, "Silent", Config.Aimbot_Silent, "Aimbot_Silent")
 AimSec:AddLabel("Team Check"):AddToggle({
     Default = Config.Aimbot_TeamCheck, Flag = "Aimbot_TeamCheck",
     Callback = function(v) Config.Aimbot_TeamCheck = v AutoSave() end
@@ -1376,25 +1445,34 @@ AimSec:AddLabel("Aim Part"):AddDropdown({
     Callback = function(v) Config.Aimbot_Part = v AutoSave() end
 })
 
-local spinLabel = RageSec:AddLabel("Spinbot")
-bindFeature(spinLabel, "Spinbot", Config.Rage_Spinbot, "Rage_Spinbot")
-RageSec:AddLabel("Spinbot Speed"):AddSlider({
-    Min = 5, Max = 50, Default = Config.Rage_SpinSpeed, Flag = "Rage_SpinSpeed",
-    Callback = function(v) Config.Rage_SpinSpeed = v AutoSave() end
+local silentLabel = SilentSec:AddLabel("Silent Aim")
+bindFeature(silentLabel, "Silent", Config.Aimbot_Silent, "Aimbot_Silent")
+
+local aaLabel = AASec:AddLabel("Enabled")
+bindFeature(aaLabel, "AA", Config.AA_Enabled, "AA_Enabled")
+AASec:AddLabel("Disable When Sitting"):AddToggle({
+    Default = Config.AA_DisableWhenSitting, Flag = "AA_Sit",
+    Callback = function(v) Config.AA_DisableWhenSitting = v AutoSave() end
 })
-RageSec:AddLabel("No Rotate"):AddToggle({
-    Default = Config.Rage_NoRotate, Flag = "Rage_NoRotate",
-    Callback = function(v) Config.Rage_NoRotate = v AutoSave() end
+AASec:AddLabel("Yaw Mode"):AddDropdown({
+    Default = Config.AA_Yaw, Values = {"None", "Back", "Spin"}, Flag = "AA_Yaw",
+    Callback = function(v) Config.AA_Yaw = v AutoSave() end
 })
-local afLabel = RageSec:AddLabel("Auto Fire")
-bindFeature(afLabel, "AutoFire", Config.Rage_AutoFire, "Rage_AutoFire")
-RageSec:AddLabel("Rapid Fire"):AddToggle({
-    Default = Config.Rage_RapidFire, Flag = "Rage_RapidFire",
+AASec:AddLabel("Jitter"):AddToggle({
+    Default = Config.AA_Jitter, Flag = "AA_Jitter",
     Callback = function(v)
-        Config.Rage_RapidFire = v
-        if v then StartRapidFire() else StopRapidFire() end
+        Config.AA_Jitter = v
+        if v and Config.AA_Enabled then StartAA() end
         AutoSave()
     end
+})
+AASec:AddLabel("Spin Speed"):AddSlider({
+    Min = 1, Max = 40, Default = Config.AA_SpinSpeed, Flag = "AA_SpinSpeed",
+    Callback = function(v) Config.AA_SpinSpeed = v AutoSave() end
+})
+AASec:AddLabel("Jitter Amount"):AddSlider({
+    Min = 5, Max = 90, Default = Config.AA_JitterAmount, Flag = "AA_JitterAmount",
+    Callback = function(v) Config.AA_JitterAmount = v AutoSave() end
 })
 
 local espLabel = ESPSec:AddLabel("Enabled")
@@ -1411,98 +1489,40 @@ ESPSec:AddLabel("Chams"):AddToggle({
     Default = Config.ESP_Chams, Flag = "ESP_Chams",
     Callback = function(v) Config.ESP_Chams = v RefreshChams() AutoSave() end
 })
-ESPSec:AddLabel("Name"):AddToggle({
-    Default = Config.ESP_Name, Flag = "ESP_Name",
-    Callback = function(v) Config.ESP_Name = v AutoSave() end
-})
-ESPSec:AddLabel("Distance"):AddToggle({
-    Default = Config.ESP_Distance, Flag = "ESP_Distance",
-    Callback = function(v) Config.ESP_Distance = v AutoSave() end
-})
-ESPSec:AddLabel("Healthbar"):AddToggle({
-    Default = Config.ESP_Healthbar, Flag = "ESP_Healthbar",
-    Callback = function(v) Config.ESP_Healthbar = v AutoSave() end
-})
-ESPSec:AddLabel("Tracers"):AddToggle({
-    Default = Config.ESP_Tracers, Flag = "ESP_Tracers",
-    Callback = function(v) Config.ESP_Tracers = v AutoSave() end
-})
-ESPSec:AddLabel("Ball"):AddToggle({
-    Default = Config.ESP_Ball, Flag = "ESP_Ball",
-    Callback = function(v) Config.ESP_Ball = v AutoSave() end
-})
-ESPSec:AddLabel("Ball Size"):AddSlider({
-    Min = 2, Max = 20, Default = Config.ESP_BallSize, Flag = "ESP_BallSize",
-    Callback = function(v) Config.ESP_BallSize = v AutoSave() end
-})
+ESPSec:AddLabel("Name"):AddToggle({ Default = Config.ESP_Name, Flag = "ESP_Name", Callback = function(v) Config.ESP_Name = v AutoSave() end })
+ESPSec:AddLabel("Distance"):AddToggle({ Default = Config.ESP_Distance, Flag = "ESP_Distance", Callback = function(v) Config.ESP_Distance = v AutoSave() end })
+ESPSec:AddLabel("Healthbar"):AddToggle({ Default = Config.ESP_Healthbar, Flag = "ESP_Healthbar", Callback = function(v) Config.ESP_Healthbar = v AutoSave() end })
+ESPSec:AddLabel("Tracers"):AddToggle({ Default = Config.ESP_Tracers, Flag = "ESP_Tracers", Callback = function(v) Config.ESP_Tracers = v AutoSave() end })
+ESPSec:AddLabel("Ball"):AddToggle({ Default = Config.ESP_Ball, Flag = "ESP_Ball", Callback = function(v) Config.ESP_Ball = v AutoSave() end })
 ESPSec:AddLabel("Max Distance"):AddSlider({
     Min = 50, Max = 100000, Default = Config.ESP_MaxDistance, Flag = "ESP_MaxDistance",
     Callback = function(v) Config.ESP_MaxDistance = v AutoSave() end
 })
 
-ESPStyle:AddLabel("Name Size"):AddSlider({
-    Min = 10, Max = 28, Default = Config.ESP_NameSize, Flag = "ESP_NameSize",
-    Callback = function(v) Config.ESP_NameSize = v AutoSave() end
-})
-ESPStyle:AddLabel("Name Position"):AddDropdown({
-    Default = Config.ESP_NamePos, Values = {"Up", "Bottom", "Left", "Right"}, Flag = "ESP_NamePos",
-    Callback = function(v) Config.ESP_NamePos = v AutoSave() end
-})
-ESPStyle:AddLabel("Dist Size"):AddSlider({
-    Min = 8, Max = 24, Default = Config.ESP_DistSize, Flag = "ESP_DistSize",
-    Callback = function(v) Config.ESP_DistSize = v AutoSave() end
-})
-ESPStyle:AddLabel("Dist Position"):AddDropdown({
-    Default = Config.ESP_DistPos, Values = {"Up", "Bottom", "Left", "Right"}, Flag = "ESP_DistPos",
-    Callback = function(v) Config.ESP_DistPos = v AutoSave() end
-})
-ESPStyle:AddLabel("Health Position"):AddDropdown({
-    Default = Config.ESP_HealthPos, Values = {"Left", "Right", "Up", "Bottom"}, Flag = "ESP_HealthPos",
-    Callback = function(v) Config.ESP_HealthPos = v AutoSave() end
-})
-ESPStyle:AddLabel("Health Width"):AddSlider({
-    Min = 2, Max = 10, Default = Config.ESP_HealthWidth, Flag = "ESP_HealthWidth",
-    Callback = function(v) Config.ESP_HealthWidth = v AutoSave() end
-})
-ESPStyle:AddLabel("Health Height"):AddSlider({
-    Min = 20, Max = 80, Default = Config.ESP_HealthHeight, Flag = "ESP_HealthHeight",
-    Callback = function(v) Config.ESP_HealthHeight = v AutoSave() end
-})
+ESPStyle:AddLabel("Name Size"):AddSlider({ Min = 10, Max = 28, Default = Config.ESP_NameSize, Flag = "ESP_NameSize", Callback = function(v) Config.ESP_NameSize = v AutoSave() end })
+ESPStyle:AddLabel("Name Position"):AddDropdown({ Default = Config.ESP_NamePos, Values = {"Up", "Bottom", "Left", "Right"}, Flag = "ESP_NamePos", Callback = function(v) Config.ESP_NamePos = v AutoSave() end })
+ESPStyle:AddLabel("Dist Size"):AddSlider({ Min = 8, Max = 24, Default = Config.ESP_DistSize, Flag = "ESP_DistSize", Callback = function(v) Config.ESP_DistSize = v AutoSave() end })
+ESPStyle:AddLabel("Dist Position"):AddDropdown({ Default = Config.ESP_DistPos, Values = {"Up", "Bottom", "Left", "Right"}, Flag = "ESP_DistPos", Callback = function(v) Config.ESP_DistPos = v AutoSave() end })
+ESPStyle:AddLabel("Health Position"):AddDropdown({ Default = Config.ESP_HealthPos, Values = {"Left", "Right", "Up", "Bottom"}, Flag = "ESP_HealthPos", Callback = function(v) Config.ESP_HealthPos = v AutoSave() end })
 pcall(function()
-    ESPStyle:AddLabel("Name Color"):AddColorPicker({
-        Default = ToColor3(Config.ESP_NameColor), Flag = "ESP_NameColor",
-        Callback = function(c) Config.ESP_NameColor = FromColor3(c) AutoSave() end
-    })
-    ESPStyle:AddLabel("Dist Color"):AddColorPicker({
-        Default = ToColor3(Config.ESP_DistColor), Flag = "ESP_DistColor",
-        Callback = function(c) Config.ESP_DistColor = FromColor3(c) AutoSave() end
-    })
-    ESPStyle:AddLabel("Enemy Fill"):AddColorPicker({
-        Default = ToColor3(Config.ESP_FillColor), Flag = "ESP_FillColor",
-        Callback = function(c) Config.ESP_FillColor = FromColor3(c) RefreshChams() AutoSave() end
-    })
-    ESPStyle:AddLabel("Team Fill"):AddColorPicker({
-        Default = ToColor3(Config.ESP_TeamFillColor), Flag = "ESP_TeamFillColor",
-        Callback = function(c) Config.ESP_TeamFillColor = FromColor3(c) RefreshChams() AutoSave() end
-    })
+    ESPStyle:AddLabel("Name Color"):AddColorPicker({ Default = ToColor3(Config.ESP_NameColor), Flag = "ESP_NameColor", Callback = function(c) Config.ESP_NameColor = FromColor3(c) AutoSave() end })
+    ESPStyle:AddLabel("Dist Color"):AddColorPicker({ Default = ToColor3(Config.ESP_DistColor), Flag = "ESP_DistColor", Callback = function(c) Config.ESP_DistColor = FromColor3(c) AutoSave() end })
+    ESPStyle:AddLabel("Enemy Fill"):AddColorPicker({ Default = ToColor3(Config.ESP_FillColor), Flag = "ESP_FillColor", Callback = function(c) Config.ESP_FillColor = FromColor3(c) RefreshChams() AutoSave() end })
+    ESPStyle:AddLabel("Team Fill"):AddColorPicker({ Default = ToColor3(Config.ESP_TeamFillColor), Flag = "ESP_TeamFillColor", Callback = function(c) Config.ESP_TeamFillColor = FromColor3(c) RefreshChams() AutoSave() end })
 end)
 
 local lcLabel = LocalSec:AddLabel("Local Chams")
 bindFeature(lcLabel, "LocalChams", Config.LocalChams, "LocalChams")
-pcall(function()
-    LocalSec:AddLabel("Local Fill"):AddColorPicker({
-        Default = ToColor3(Config.LocalChams_Fill), Flag = "LocalChams_Fill",
-        Callback = function(c) Config.LocalChams_Fill = FromColor3(c) RefreshChams() AutoSave() end
-    })
-end)
 
 local jumpLabel = MoveSec:AddLabel("Auto Jump")
 bindFeature(jumpLabel, "Bhop", Config.AutoJump, "AutoJump")
 MoveSec:AddLabel("WalkSpeed Loop"):AddSlider({
     Min = 0, Max = 100, Default = Config.LoopWalkSpeed, Flag = "LoopWalkSpeed",
+    Nums = { [0] = "None" },
     Callback = function(v)
         Config.LoopWalkSpeed = v
         if v <= 0 then
+            Config.LoopWalkSpeed = 0
             if speedLoopConn then speedLoopConn:Disconnect() speedLoopConn = nil end
         else
             StartWalkSpeedLoop()
@@ -1512,9 +1532,11 @@ MoveSec:AddLabel("WalkSpeed Loop"):AddSlider({
 })
 MoveSec:AddLabel("JumpPower Loop"):AddSlider({
     Min = 0, Max = 200, Default = Config.LoopJumpPower, Flag = "LoopJumpPower",
+    Nums = { [0] = "None" },
     Callback = function(v)
         Config.LoopJumpPower = v
         if v <= 0 then
+            Config.LoopJumpPower = 0
             if jumpPowerConn then jumpPowerConn:Disconnect() jumpPowerConn = nil end
         else
             StartJumpPowerLoop()
@@ -1529,14 +1551,12 @@ CamSec:AddLabel("TP Distance"):AddSlider({
     Min = 2, Max = 30, Default = Config.ThirdPerson_Distance, Flag = "TP_Distance",
     Callback = function(v) Config.ThirdPerson_Distance = v AutoSave() end
 })
-
 local fovLabel = CamSec:AddLabel("Loop FOV")
 bindFeature(fovLabel, "LoopFOV", Config.LoopFOV, "LoopFOV")
 CamSec:AddLabel("FOV Value"):AddSlider({
     Min = 30, Max = 120, Default = Config.LoopFOV_Value, Flag = "LoopFOV_Value",
     Callback = function(v) Config.LoopFOV_Value = v AutoSave() end
 })
-
 local fcLabel = CamSec:AddLabel("Freecam")
 bindFeature(fcLabel, "Freecam", Config.Freecam, "Freecam")
 CamSec:AddLabel("Freecam Speed"):AddSlider({
@@ -1547,15 +1567,113 @@ CamSec:AddLabel("Freecam Speed"):AddSlider({
 local ambLabel = EnvSec:AddLabel("Custom Ambient")
 bindFeature(ambLabel, "Ambient", Config.AmbientEnabled, "AmbientEnabled")
 pcall(function()
-    EnvSec:AddLabel("Ambient"):AddColorPicker({
-        Default = ToColor3(Config.AmbientColor), Flag = "AmbientColor",
-        Callback = function(c) Config.AmbientColor = FromColor3(c) ApplyAmbient() AutoSave() end
-    })
-    EnvSec:AddLabel("Outdoor"):AddColorPicker({
-        Default = ToColor3(Config.OutdoorAmbient), Flag = "OutdoorAmbient",
-        Callback = function(c) Config.OutdoorAmbient = FromColor3(c) ApplyAmbient() AutoSave() end
-    })
+    EnvSec:AddLabel("Ambient"):AddColorPicker({ Default = ToColor3(Config.AmbientColor), Flag = "AmbientColor", Callback = function(c) Config.AmbientColor = FromColor3(c) ApplyWorld() AutoSave() end })
+    EnvSec:AddLabel("Outdoor"):AddColorPicker({ Default = ToColor3(Config.OutdoorAmbient), Flag = "OutdoorAmbient", Callback = function(c) Config.OutdoorAmbient = FromColor3(c) ApplyWorld() AutoSave() end })
+    EnvSec:AddLabel("Shift Top"):AddColorPicker({ Default = ToColor3(Config.ColorShift_Top), Flag = "ColorShift_Top", Callback = function(c) Config.ColorShift_Top = FromColor3(c) ApplyWorld() AutoSave() end })
+    EnvSec:AddLabel("Shift Bottom"):AddColorPicker({ Default = ToColor3(Config.ColorShift_Bottom), Flag = "ColorShift_Bottom", Callback = function(c) Config.ColorShift_Bottom = FromColor3(c) ApplyWorld() AutoSave() end })
 end)
+EnvSec:AddLabel("Fog"):AddToggle({
+    Default = Config.FogEnabled, Flag = "FogEnabled",
+    Callback = function(v) Config.FogEnabled = v ApplyWorld() AutoSave() end
+})
+EnvSec:AddLabel("Fog Start"):AddSlider({ Min = 0, Max = 500, Default = Config.FogStart, Flag = "FogStart", Callback = function(v) Config.FogStart = v ApplyWorld() AutoSave() end })
+EnvSec:AddLabel("Fog End"):AddSlider({ Min = 100, Max = 5000, Default = Config.FogEnd, Flag = "FogEnd", Callback = function(v) Config.FogEnd = v ApplyWorld() AutoSave() end })
+pcall(function()
+    EnvSec:AddLabel("Fog Color"):AddColorPicker({ Default = ToColor3(Config.FogColor), Flag = "FogColor", Callback = function(c) Config.FogColor = FromColor3(c) ApplyWorld() AutoSave() end })
+end)
+
+FxSec:AddLabel("Bloom"):AddToggle({
+    Default = Config.BloomEnabled, Flag = "BloomEnabled",
+    Callback = function(v) Config.BloomEnabled = v ApplyWorld() AutoSave() end
+})
+FxSec:AddLabel("Bloom Intensity"):AddSlider({ Min = 0, Max = 2, Default = Config.BloomIntensity, Rounding = 2, Flag = "BloomIntensity", Callback = function(v) Config.BloomIntensity = v ApplyWorld() AutoSave() end })
+FxSec:AddLabel("Bloom Size"):AddSlider({ Min = 1, Max = 56, Default = Config.BloomSize, Flag = "BloomSize", Callback = function(v) Config.BloomSize = v ApplyWorld() AutoSave() end })
+FxSec:AddLabel("Bloom Threshold"):AddSlider({ Min = 0, Max = 2, Default = Config.BloomThreshold, Rounding = 2, Flag = "BloomThreshold", Callback = function(v) Config.BloomThreshold = v ApplyWorld() AutoSave() end })
+FxSec:AddLabel("Color Correction"):AddToggle({
+    Default = Config.ColorCorrectionEnabled, Flag = "CCEnabled",
+    Callback = function(v) Config.ColorCorrectionEnabled = v ApplyWorld() AutoSave() end
+})
+FxSec:AddLabel("CC Brightness"):AddSlider({ Min = -1, Max = 1, Default = Config.CC_Brightness, Rounding = 2, Flag = "CC_Brightness", Callback = function(v) Config.CC_Brightness = v ApplyWorld() AutoSave() end })
+FxSec:AddLabel("CC Contrast"):AddSlider({ Min = -1, Max = 1, Default = Config.CC_Contrast, Rounding = 2, Flag = "CC_Contrast", Callback = function(v) Config.CC_Contrast = v ApplyWorld() AutoSave() end })
+FxSec:AddLabel("CC Saturation"):AddSlider({ Min = -1, Max = 1, Default = Config.CC_Saturation, Rounding = 2, Flag = "CC_Saturation", Callback = function(v) Config.CC_Saturation = v ApplyWorld() AutoSave() end })
+FxSec:AddLabel("Sun Rays"):AddToggle({
+    Default = Config.SunRaysEnabled, Flag = "SunRays",
+    Callback = function(v) Config.SunRaysEnabled = v ApplyWorld() AutoSave() end
+})
+FxSec:AddLabel("Sun Rays Intensity"):AddSlider({ Min = 0, Max = 1, Default = Config.SunRaysIntensity, Rounding = 2, Flag = "SunRaysI", Callback = function(v) Config.SunRaysIntensity = v ApplyWorld() AutoSave() end })
+FxSec:AddLabel("Atmosphere"):AddToggle({
+    Default = Config.AtmosphereEnabled, Flag = "Atmosphere",
+    Callback = function(v) Config.AtmosphereEnabled = v ApplyWorld() AutoSave() end
+})
+FxSec:AddLabel("Atmosphere Density"):AddSlider({ Min = 0, Max = 1, Default = Config.AtmosphereDensity, Rounding = 2, Flag = "AtmoDensity", Callback = function(v) Config.AtmosphereDensity = v ApplyWorld() AutoSave() end })
+
+SkinSec:AddLabel("Username"):AddTextBox({
+    Default = Config.Skin_Username or "",
+    Flag = "Skin_Username",
+    Callback = function(v)
+        Config.Skin_Username = tostring(v or "")
+        AutoSave()
+    end
+})
+SkinSec:AddLabel("UserId"):AddTextBox({
+    Default = tostring(Config.Skin_UserId or 0),
+    Flag = "Skin_UserId",
+    Callback = function(v)
+        Config.Skin_UserId = tonumber(v) or 0
+        AutoSave()
+    end
+})
+SkinSec:AddButton({
+    Name = "Apply Skin (Username)",
+    Callback = function()
+        local name = Config.Skin_Username
+        if not name or name == "" then
+            warn("[Skin] Empty username")
+            return
+        end
+        local id = ResolveUsernameToId(name)
+        if not id then
+            warn("[Skin] Username not found")
+            return
+        end
+        Config.Skin_UserId = id
+        local ok, msg = ApplySkinChanger(id)
+        pcall(function()
+            NeverLose:CreateNotification().new({
+                Title = "Skin Changer",
+                Content = ok and ("Applied " .. name) or tostring(msg),
+                Duration = 3
+            })
+        end)
+        AutoSave()
+    end
+})
+SkinSec:AddButton({
+    Name = "Apply Skin (UserId)",
+    Callback = function()
+        local ok, msg = ApplySkinChanger(Config.Skin_UserId)
+        pcall(function()
+            NeverLose:CreateNotification().new({
+                Title = "Skin Changer",
+                Content = ok and "Applied" or tostring(msg),
+                Duration = 3
+            })
+        end)
+    end
+})
+SkinSec:AddButton({
+    Name = "Apply Own Skin",
+    Callback = function()
+        local ok, msg = ApplySkinChanger(player.UserId)
+        pcall(function()
+            NeverLose:CreateNotification().new({
+                Title = "Skin Changer",
+                Content = ok and "Own skin applied" or tostring(msg),
+                Duration = 3
+            })
+        end)
+    end
+})
 
 FeatureState.AA = Config.AA_Enabled
 FeatureState.Aimbot = Config.Aimbot_Enabled
@@ -1567,17 +1685,18 @@ FeatureState.LoopFOV = Config.LoopFOV
 FeatureState.LocalChams = Config.LocalChams
 FeatureState.Freecam = Config.Freecam
 FeatureState.Ambient = Config.AmbientEnabled
-FeatureState.Spinbot = Config.Rage_Spinbot
 FeatureState.AutoFire = Config.Rage_AutoFire
+FeatureState.KillAura = Config.Rage_KillAura
 
-if Config.AA_Enabled or Config.Rage_Spinbot then StartAA() end
-if Config.Aimbot_Enabled or Config.Aimbot_Silent then StartAimbot() end
+if Config.AA_Enabled then StartAA() end
+if Config.Aimbot_Enabled or Config.Aimbot_Silent or Config.Rage_AutoFire then StartAimbot() end
 if Config.AutoJump then StartAutoJump() end
 if Config.LoopWalkSpeed and Config.LoopWalkSpeed > 0 then StartWalkSpeedLoop() end
 if Config.LoopJumpPower and Config.LoopJumpPower > 0 then StartJumpPowerLoop() end
 if Config.ThirdPerson then StartThirdPerson() end
 if Config.LoopFOV then StartLoopFOV() end
 if Config.Freecam then StartFreecam() end
-if Config.AmbientEnabled then ApplyAmbient() end
-if Config.Rage_RapidFire then StartRapidFire() end
+if Config.Rage_KillAura then StartKillAura() end
+ApplyWorld()
 RefreshChams()
+UnlockMouse()
