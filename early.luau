@@ -4390,6 +4390,8 @@ function NeverLose:CreateWindow(Config)
 
 	ConfigFrame.Name = NeverLose.RandomString();
 	ConfigFrame.Parent = RightHeader
+	ConfigFrame.Visible = false
+	ConfigFrame.Size = UDim2.fromOffset(0, 0)
 	ConfigFrame.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigFrame.BackgroundColor3 = Color3.fromRGB(13, 17, 22)
 	ConfigFrame.BackgroundTransparency = 0.750

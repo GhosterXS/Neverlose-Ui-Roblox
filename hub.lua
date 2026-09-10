@@ -142,7 +142,6 @@ local Config = {
         LocalChams = { Key = "None", Mode = "Toggle" },
         Freecam = { Key = "None", Mode = "Toggle" },
         Ambient = { Key = "None", Mode = "Toggle" },
-        Silent = { Key = "None", Mode = "Toggle" },
     },
 }
 
@@ -199,21 +198,16 @@ end
 local function ApplyMenuMouse(open)
     pcall(function()
         if open then
-            -- Unlock so the UI is usable
             UserInputService.MouseIconEnabled = true
             UserInputService.MouseBehavior = Enum.MouseBehavior.Default
         else
-            -- Restore gameplay mouse (freecam keeps lock center)
+            -- Only freecam forces lock; third person must NOT trap the mouse
             if Config.Freecam then
                 UserInputService.MouseIconEnabled = false
                 UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
             else
-                UserInputService.MouseIconEnabled = savedMouseIcon
-                UserInputService.MouseBehavior = savedMouseBehavior
-                -- Default gameplay feel if capture was also Default
-                if savedMouseBehavior == Enum.MouseBehavior.Default and not Config.ThirdPerson then
-                    -- leave Default; many games use LockCenter in first person via camera scripts
-                end
+                UserInputService.MouseIconEnabled = true
+                UserInputService.MouseBehavior = Enum.MouseBehavior.Default
             end
         end
     end)
@@ -351,67 +345,56 @@ local function ForceLocalVisible()
     if player.Character then vis(player.Character) end
 end
 
-do
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "NLIntro"
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 9999
-    gui.ResetOnSpawn = false
-    pcall(function() gui.Parent = gethui and gethui() or CoreGui end)
-    if not gui.Parent then gui.Parent = player:WaitForChild("PlayerGui") end
-    local bg = Instance.new("Frame")
-    bg.Size = UDim2.fromScale(1, 1)
-    bg.BackgroundColor3 = Color3.fromRGB(8, 10, 14)
-    bg.BorderSizePixel = 0
-    bg.Parent = gui
-    local title = Instance.new("TextLabel")
-    title.AnchorPoint = Vector2.new(0.5, 0.5)
-    title.Position = UDim2.fromScale(0.5, 0.5)
-    title.Size = UDim2.fromOffset(420, 60)
-    title.BackgroundTransparency = 1
-    title.Font = Enum.Font.GothamBold
-    title.Text = "Neverlose"
-    title.TextColor3 = Color3.fromRGB(120, 190, 255)
-    title.TextSize = 42
-    title.TextTransparency = 1
-    title.Parent = bg
-    local sub = Instance.new("TextLabel")
-    sub.AnchorPoint = Vector2.new(0.5, 0)
-    sub.Position = UDim2.new(0.5, 0, 0.5, 36)
-    sub.Size = UDim2.fromOffset(300, 24)
-    sub.BackgroundTransparency = 1
-    sub.Font = Enum.Font.Gotham
-    sub.Text = "Universal Hub"
-    sub.TextColor3 = Color3.fromRGB(160, 170, 190)
-    sub.TextSize = 14
-    sub.TextTransparency = 1
-    sub.Parent = bg
-    TweenService:Create(title, TweenInfo.new(0.5), { TextTransparency = 0 }):Play()
-    TweenService:Create(sub, TweenInfo.new(0.5), { TextTransparency = 0.2 }):Play()
-    for i = 1, 16 do
-        local line = Instance.new("Frame")
-        line.AnchorPoint = Vector2.new(0.5, 0.5)
-        line.Position = UDim2.fromScale(0.5, 0.5)
-        line.Size = UDim2.fromOffset(2, 0)
-        line.BackgroundColor3 = Color3.fromRGB(100, 180, 255)
-        line.BackgroundTransparency = 0.25
-        line.BorderSizePixel = 0
-        line.Parent = bg
-        local angle = math.rad((i - 1) * (360 / 16))
-        TweenService:Create(line, TweenInfo.new(0.65, Enum.EasingStyle.Quad), {
-            Size = UDim2.fromOffset(2, 70),
-            Position = UDim2.new(0.5, math.cos(angle) * 160, 0.5, math.sin(angle) * 160),
-            BackgroundTransparency = 1,
-            Rotation = math.deg(angle) + 90
-        }):Play()
-    end
-    task.wait(1.15)
-    TweenService:Create(title, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
-    TweenService:Create(sub, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
-    TweenService:Create(bg, TweenInfo.new(0.35), { BackgroundTransparency = 1 }):Play()
-    task.wait(0.4)
-    gui:Destroy()
-end
+
+-- Intro: white "Neverlose" + two horizontal lines
+pcall(function()
+    local guiParent = (gethui and gethui()) or CoreGui
+    local introGui = Instance.new("ScreenGui")
+    introGui.Name = "NL_Intro"
+    introGui.IgnoreGuiInset = true
+    introGui.DisplayOrder = 100000
+    introGui.ResetOnSpawn = false
+    introGui.Parent = guiParent
+
+    local label = Instance.new("TextLabel")
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Position = UDim2.fromScale(0.5, 0.5)
+    label.Size = UDim2.fromOffset(400, 48)
+    label.BackgroundTransparency = 1
+    label.Text = "Neverlose"
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 32
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextTransparency = 1
+    label.Parent = introGui
+
+    local left = Instance.new("Frame")
+    left.AnchorPoint = Vector2.new(1, 0.5)
+    left.Position = UDim2.new(0.5, -110, 0.5, 0)
+    left.Size = UDim2.fromOffset(0, 2)
+    left.BorderSizePixel = 0
+    left.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    left.Parent = introGui
+
+    local right = Instance.new("Frame")
+    right.AnchorPoint = Vector2.new(0, 0.5)
+    right.Position = UDim2.new(0.5, 110, 0.5, 0)
+    right.Size = UDim2.fromOffset(0, 2)
+    right.BorderSizePixel = 0
+    right.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    right.Parent = introGui
+
+    TweenService:Create(label, TweenInfo.new(0.4, Enum.EasingStyle.Quad), { TextTransparency = 0 }):Play()
+    TweenService:Create(left, TweenInfo.new(0.55, Enum.EasingStyle.Quad), { Size = UDim2.fromOffset(140, 2) }):Play()
+    TweenService:Create(right, TweenInfo.new(0.55, Enum.EasingStyle.Quad), { Size = UDim2.fromOffset(140, 2) }):Play()
+    task.delay(1.4, function()
+        TweenService:Create(label, TweenInfo.new(0.35), { TextTransparency = 1 }):Play()
+        TweenService:Create(left, TweenInfo.new(0.35), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
+        TweenService:Create(right, TweenInfo.new(0.35), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
+        task.delay(0.4, function() pcall(function() introGui:Destroy() end) end)
+    end)
+end)
+
 
 pcall(function()
     NeverLose:CreateNotification().new({ Title = "Neverlose", Content = "Universal Hub loaded", Duration = 3 })
@@ -420,76 +403,11 @@ end)
 local FeatureState = {
     AA = false, Aimbot = false, ESP = false, Bhop = false,
     ThirdPerson = false, LoopFOV = false, LocalChams = false,
-    Freecam = false, Ambient = false, Silent = false,
+    Freecam = false, Ambient = false,
     AutoFire = false, KillAura = false,
 }
 
 local LastKeyFeature = nil
-local ModeMenuGui = nil
-
-local function CloseModeMenu()
-    if ModeMenuGui then
-        pcall(function() ModeMenuGui:Destroy() end)
-        ModeMenuGui = nil
-    end
-end
-
-local function OpenModeMenu(featureName, screenPos)
-    CloseModeMenu()
-    local data = Config.Keys[featureName]
-    if not data or not data.Key or data.Key == "None" or data.Key == "" then
-        return
-    end
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "NL_KeyModeMenu"
-    gui.ResetOnSpawn = false
-    gui.DisplayOrder = 10000
-    gui.IgnoreGuiInset = true
-    pcall(function() gui.Parent = gethui and gethui() or CoreGui end)
-    if not gui.Parent then gui.Parent = player:WaitForChild("PlayerGui") end
-    ModeMenuGui = gui
-
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.fromOffset(140, 108)
-    frame.Position = UDim2.fromOffset(
-        math.clamp(screenPos.X, 8, camera.ViewportSize.X - 148),
-        math.clamp(screenPos.Y, 8, camera.ViewportSize.Y - 116)
-    )
-    frame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
-    frame.BorderSizePixel = 0
-    frame.Parent = gui
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
-    corner.Parent = frame
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(50, 50, 60)
-    stroke.Parent = frame
-
-    local modes = {"Toggle", "Hold", "Always"}
-    for i, mode in ipairs(modes) do
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -8, 0, 28)
-        btn.Position = UDim2.fromOffset(4, 6 + (i - 1) * 32)
-        btn.BackgroundColor3 = data.Mode == mode and Color3.fromRGB(40, 80, 140) or Color3.fromRGB(28, 28, 34)
-        btn.Text = mode
-        btn.TextColor3 = Color3.fromRGB(240, 240, 245)
-        btn.Font = Enum.Font.Gotham
-        btn.TextSize = 13
-        btn.BorderSizePixel = 0
-        btn.Parent = frame
-        local c = Instance.new("UICorner")
-        c.CornerRadius = UDim.new(0, 4)
-        c.Parent = btn
-        btn.MouseButton1Click:Connect(function()
-            Config.Keys[featureName].Mode = mode
-            if mode == "Always" then
-                FeatureState[featureName] = true
-            end
-            AutoSave()
-            CloseModeMenu()
-        end)
-    end
-end
 
 local aaConn, spinAngle, jitterSide, jitterClock = nil, 0, 1, 0
 
@@ -686,27 +604,14 @@ local function StartAimbot()
         if fovCircle then
             fovCircle.Position = camera.ViewportSize / 2
             fovCircle.Radius = Config.Aimbot_FOV
-            fovCircle.Visible = Config.Aimbot_ShowFOV and (Config.Aimbot_Enabled or Config.Aimbot_Silent)
+            fovCircle.Visible = Config.Aimbot_ShowFOV and Config.Aimbot_Enabled
         end
         local aimHeld = IsBindHeld(Config.Aimbot_AimKey)
         local wantAim = Config.Aimbot_Enabled and aimHeld
-        local wantSilent = Config.Aimbot_Silent and aimHeld
-        if not wantAim and not wantSilent then return end
+        if not wantAim then return end
         local target = GetClosest()
         if not target then return end
-        if wantSilent then
-            -- silent: snap camera look toward target while aim key is held
-            pcall(function()
-                local origin = camera.CFrame.Position
-                camera.CFrame = CFrame.new(origin, target.Position)
-            end)
-            -- also nudge mouse when available for tools that read mouse
-            if moveMouse then
-                pcall(function() MoveMouseToTarget(target) end)
-            end
-        elseif wantAim then
-            MoveMouseToTarget(target)
-        end
+        MoveMouseToTarget(target)
     end)
 end
 
@@ -806,7 +711,10 @@ local function RefreshChams()
 end
 
 task.spawn(function()
-    while true do pcall(RefreshChams) task.wait(5) end
+    while true do
+        pcall(RefreshChams)
+        task.wait(Config.LocalChams and 0.35 or 5)
+    end
 end)
 
 local function OffsetPos(base, side, amount)
@@ -895,32 +803,42 @@ local function UpdateESPDrawings()
                                 d.Dist.Visible = false
                             end
                         end
-                        -- OOF arrow
-                        if d.OOF then
+                        -- OOF arrow (Lines — works without Drawing Triangle support)
+                        if not d.OOF1 then
+                            d.OOF1 = CreateDrawing("Line")
+                            d.OOF2 = CreateDrawing("Line")
+                            d.OOF3 = CreateDrawing("Line")
+                        end
+                        if d.OOF1 then
                             if (not showOnScreen) and Config.ESP_OOF then
                                 local vp = camera.ViewportSize
-                                local cx, cy = vp.X / 2, vp.Y / 2
-                                local dir = Vector2.new(screen.X - cx, screen.Y - cy)
-                                if dir.Magnitude < 1 then dir = Vector2.new(0, -1) end
-                                dir = dir.Unit
-                                local radius = math.min(cx, cy) * 0.42
+                                local cx, cy = vp.X * 0.5, vp.Y * 0.5
+                                local rel = camera.CFrame:PointToObjectSpace(hrp.Position)
+                                local dir = Vector2.new(rel.X, -rel.Y)
+                                if dir.Magnitude < 0.001 then dir = Vector2.new(0, -1) else dir = dir.Unit end
+                                local radius = math.min(cx, cy) * 0.45
                                 local tip = Vector2.new(cx, cy) + dir * radius
                                 local side = Vector2.new(-dir.Y, dir.X)
-                                local size = Config.ESP_OOF_Size or 12
-                                local p1 = tip
-                                local p2 = tip - dir * size + side * (size * 0.55)
-                                local p3 = tip - dir * size - side * (size * 0.55)
+                                local size = Config.ESP_OOF_Size or 14
+                                local base = tip - dir * size
+                                local p2 = base + side * (size * 0.6)
+                                local p3 = base - side * (size * 0.6)
                                 local oc = ToColor3(Config.ESP_OOF_Color or {255,255,255})
-                                d.OOF.PointA = p1
-                                d.OOF.PointB = p2
-                                d.OOF.PointC = p3
-                                d.OOF.Color = oc
-                                d.OOF.Filled = true
-                                d.OOF.Visible = true
+                                for _, ln in ipairs({d.OOF1, d.OOF2, d.OOF3}) do
+                                    ln.Color = oc
+                                    ln.Thickness = 2
+                                    ln.Visible = true
+                                end
+                                d.OOF1.From, d.OOF1.To = tip, p2
+                                d.OOF2.From, d.OOF2.To = tip, p3
+                                d.OOF3.From, d.OOF3.To = p2, p3
                             else
-                                d.OOF.Visible = false
+                                if d.OOF1 then d.OOF1.Visible = false end
+                                if d.OOF2 then d.OOF2.Visible = false end
+                                if d.OOF3 then d.OOF3.Visible = false end
                             end
                         end
+                        if d.OOF then d.OOF.Visible = false end
                         if onScreen and screen.Z > 0 and d.Health and hum then
                             local headScreen = camera:WorldToViewportPoint((head and head.Position or hrp.Position) + Vector3.new(0, 0.9, 0))
                             local hp = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
@@ -975,6 +893,7 @@ local function StartThirdPerson()
     thirdConn = RunService.RenderStepped:Connect(function()
         if not Config.ThirdPerson or Config.Freecam then return end
         ForceLocalVisible()
+        -- Do not force MouseBehavior here (was trapping cursor)
         pcall(function()
             player.CameraMinZoomDistance = Config.ThirdPerson_Distance
             player.CameraMaxZoomDistance = Config.ThirdPerson_Distance
@@ -984,7 +903,7 @@ local function StartThirdPerson()
         if hum then
             camera.CameraType = Enum.CameraType.Custom
             camera.CameraSubject = hum
-            pcall(function() hum.CameraOffset = Vector3.new(0, 1, 0) end)
+            pcall(function() hum.CameraOffset = Vector3.new(0, 1.5, 0) end)
         end
     end)
 end
@@ -1242,10 +1161,7 @@ local function ApplyFeature(name, on)
         if on then StartAA() else StopAA() end
     elseif name == "Aimbot" then
         Config.Aimbot_Enabled = on
-        if on or Config.Aimbot_Silent then StartAimbot() else StopAimbot() end
-    elseif name == "Silent" then
-        Config.Aimbot_Silent = on
-        if on or Config.Aimbot_Enabled then StartAimbot() else StopAimbot() end
+        if on then StartAimbot() else StopAimbot() end
     elseif name == "ESP" then
         Config.ESP_Enabled = on
         if not on then ClearESP() end
@@ -1272,14 +1188,6 @@ local function ApplyFeature(name, on)
     AutoSave()
 end
 
-RunService.Heartbeat:Connect(function()
-    for name, data in pairs(Config.Keys) do
-        if data.Mode == "Always" and not FeatureState[name] then
-            ApplyFeature(name, true)
-        end
-    end
-end)
-
 UserInputService.InputBegan:Connect(function(input, gpe)
     if input.KeyCode == Enum.KeyCode.W then moveKeys.W = true end
     if input.KeyCode == Enum.KeyCode.A then moveKeys.A = true end
@@ -1289,21 +1197,10 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     if input.KeyCode == Enum.KeyCode.Q then moveKeys.Q = true end
     if input.KeyCode == Enum.KeyCode.LeftShift then moveKeys.Shift = true end
 
-    if input.UserInputType == Enum.UserInputType.MouseButton2 and not gpe then
-        if LastKeyFeature and Config.Keys[LastKeyFeature] and Config.Keys[LastKeyFeature].Key ~= "None" then
-            local pos = UserInputService:GetMouseLocation()
-            OpenModeMenu(LastKeyFeature, pos)
-        end
-    end
-
     if gpe then return end
     for name, data in pairs(Config.Keys) do
-        if data.Mode ~= "Always" and InputMatches(data.Key, input) then
-            if data.Mode == "Toggle" then
-                ApplyFeature(name, not FeatureState[name])
-            else
-                ApplyFeature(name, true)
-            end
+        if InputMatches(data.Key, input) then
+            ApplyFeature(name, not FeatureState[name])
         end
     end
 end)
@@ -1316,11 +1213,6 @@ UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.E then moveKeys.E = false end
     if input.KeyCode == Enum.KeyCode.Q then moveKeys.Q = false end
     if input.KeyCode == Enum.KeyCode.LeftShift then moveKeys.Shift = false end
-    for name, data in pairs(Config.Keys) do
-        if data.Mode == "Hold" and InputMatches(data.Key, input) then
-            ApplyFeature(name, false)
-        end
-    end
 end)
 
 RunService.RenderStepped:Connect(function()
@@ -1426,9 +1318,8 @@ end
 
 Window:AddTabLabel("MAIN")
 local LegitTab = Window:AddTab({ Icon = "crosshairs", Name = "Legit" })
-local AATab = Window:AddTab({ Icon = "arrow-spin-clockwise", Name = "AA" })
+local AATab = Window:AddTab({ Icon = "two-arrows-spin-clockwise", Name = "AA" })
 local MoveTab = Window:AddTab({ Icon = "person", Name = "Movement" })
-local SkinTab = Window:AddTab({ Icon = "user", Name = "Skin changer" })
 local Visuals = Window:AddTab({ Icon = "eye", Name = "Visuals" })
 local WorldTab = Window:AddTab({ Icon = "globe", Name = "World" })
 local MiscTab = Window:AddTab({ Icon = "cube", Name = "Misc" })
@@ -1443,8 +1334,6 @@ local MoveSec = MoveTab:AddSection({ Name = "MOVEMENT", Position = "left" })
 local CamSec = MiscTab:AddSection({ Name = "CAMERA", Position = "left" })
 local EnvSec = WorldTab:AddSection({ Name = "LIGHTING", Position = "left" })
 local FxSec = WorldTab:AddSection({ Name = "EFFECTS", Position = "right" })
-local SkinCatSec = SkinTab:AddSection({ Name = "CATALOG", Position = "left" })
-local SkinBrowseSec = SkinTab:AddSection({ Name = "BROWSER", Position = "right" })
 local CfgSec = ConfigTab:AddSection({ Name = "CONFIGS", Position = "left" })
 
 
@@ -1461,8 +1350,6 @@ AimSec:AddLabel("Aim Key"):AddKeybind({
         end
     end
 })
-local silentLabel = AimSec:AddLabel("Silent")
-bindFeature(silentLabel, "Silent", Config.Aimbot_Silent, "Aimbot_Silent")
 AimSec:AddLabel("Team Check"):AddToggle({
     Default = Config.Aimbot_TeamCheck, Flag = "Aimbot_TeamCheck",
     Callback = function(v) Config.Aimbot_TeamCheck = v AutoSave() end
@@ -1656,258 +1543,6 @@ FxSec:AddLabel("Atmosphere"):AddToggle({
 FxSec:AddLabel("Atmosphere Density"):AddSlider({ Min = 0, Max = 1, Default = Config.AtmosphereDensity, Rounding = 2, Flag = "AtmoDensity", Callback = function(v) Config.AtmosphereDensity = v ApplyWorld() AutoSave() end })
 
 
--- ===================== Skin changer (catalog style) =====================
-local AvatarEditorService = game:GetService("AvatarEditorService")
-local InsertService = game:GetService("InsertService")
-
-local SkinState = {
-    Category = "Accessories",
-    Sub = "Head",
-    Query = "",
-    Sort = "Relevance",
-    Results = {},
-}
-
-local CATEGORIES = {
-    Accessories = {"Head", "Face", "Neck", "Shoulder", "Front", "Back", "Waist", "Hair"},
-    ["Body Parts"] = {"Head", "Torso", "Right Arm", "Left Arm", "Right Leg", "Left Leg"},
-    Clothing = {"Shirt", "Pants", "TShirt", "Face"},
-    Animations = {"Idle", "Walk", "Run", "Jump", "Fall", "Climb", "Swim"},
-}
-
-local SUB_TO_ASSET = {
-    Head = Enum.AvatarAssetType.Hat,
-    Face = Enum.AvatarAssetType.FaceAccessory,
-    Neck = Enum.AvatarAssetType.NeckAccessory,
-    Shoulder = Enum.AvatarAssetType.ShoulderAccessory,
-    Front = Enum.AvatarAssetType.FrontAccessory,
-    Back = Enum.AvatarAssetType.BackAccessory,
-    Waist = Enum.AvatarAssetType.WaistAccessory,
-    Hair = Enum.AvatarAssetType.HairAccessory,
-    Shirt = Enum.AvatarAssetType.Shirt,
-    Pants = Enum.AvatarAssetType.Pants,
-    TShirt = Enum.AvatarAssetType.TShirt,
-}
-
-local function getLocalHumanoidDescription()
-    local char = player.Character or player.CharacterAdded:Wait()
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then return nil end
-    local ok, desc = pcall(function() return hum:GetAppliedDescription() end)
-    if ok and desc then return desc end
-    ok, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(player.UserId) end)
-    if ok then return desc end
-    return nil
-end
-
-local function applyAccessoryId(assetId, sub)
-    assetId = tonumber(assetId)
-    if not assetId then return false, "bad id" end
-    local desc = getLocalHumanoidDescription()
-    if not desc then return false, "no description" end
-    local fieldMap = {
-        Head = "HatAccessory",
-        Face = "FaceAccessory",
-        Neck = "NeckAccessory",
-        Shoulder = "ShoulderAccessory",
-        Front = "FrontAccessory",
-        Back = "BackAccessory",
-        Waist = "WaistAccessory",
-        Hair = "HairAccessory",
-        Shirt = "Shirt",
-        Pants = "Pants",
-        TShirt = "GraphicTShirt",
-    }
-    local field = fieldMap[sub]
-    if field then
-        pcall(function()
-            if field == "Shirt" or field == "Pants" or field == "GraphicTShirt" then
-                desc[field] = assetId
-            else
-                -- accessories are comma-separated ids on description strings
-                local cur = tostring(desc[field] or "")
-                if cur == "" or cur == "0" then
-                    desc[field] = tostring(assetId)
-                else
-                    desc[field] = cur .. "," .. tostring(assetId)
-                end
-            end
-        end)
-    end
-    local char = player.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        pcall(function() hum:ApplyDescription(desc) end)
-        return true
-    end
-    return false, "no humanoid"
-end
-
-local function searchCatalog(query, sub)
-    local results = {}
-    local assetType = SUB_TO_ASSET[sub]
-    local ok, pages = pcall(function()
-        local params = CatalogSearchParams.new()
-        params.SearchKeyword = query or ""
-        params.Limit = 30
-        if assetType then
-            pcall(function() params.AssetTypes = { assetType } end)
-        end
-        pcall(function()
-            if SkinState.Sort == "MostFavorited" then
-                params.SortType = Enum.CatalogSortType.MostFavorited
-            elseif SkinState.Sort == "PriceHigh" then
-                params.SortType = Enum.CatalogSortType.PriceHighToLow
-            elseif SkinState.Sort == "PriceLow" then
-                params.SortType = Enum.CatalogSortType.PriceLowToHigh
-            else
-                params.SortType = Enum.CatalogSortType.Relevance
-            end
-        end)
-        return AvatarEditorService:SearchCatalog(params)
-    end)
-    if ok and pages then
-        local pageOk, items = pcall(function() return pages:GetCurrentPage() end)
-        if pageOk and type(items) == "table" then
-            for _, item in ipairs(items) do
-                table.insert(results, {
-                    Id = item.Id or item.AssetId,
-                    Name = item.Name or tostring(item.Id),
-                })
-            end
-        end
-    end
-    -- Fallback HTTP catalog
-    if #results == 0 then
-        pcall(function()
-            local q = HttpService:UrlEncode(query or "hat")
-            local url = "https://catalog.roblox.com/v1/search/items/details?Category=11&Limit=30&Keyword=" .. q
-            local body = game:HttpGet(url)
-            local data = HttpService:JSONDecode(body)
-            if data and data.data then
-                for _, item in ipairs(data.data) do
-                    table.insert(results, { Id = item.id, Name = item.name or tostring(item.id) })
-                end
-            end
-        end)
-    end
-    return results
-end
-
--- Category buttons
-for catName, _ in pairs(CATEGORIES) do
-    SkinCatSec:AddButton({
-        Name = catName,
-        Callback = function()
-            SkinState.Category = catName
-            local subs = CATEGORIES[catName]
-            SkinState.Sub = subs[1]
-            pcall(function()
-                NeverLose:CreateNotification().new({
-                    Title = "Skin changer",
-                    Content = "Category: " .. catName,
-                    Duration = 2
-                })
-            end)
-        end
-    })
-end
-
-SkinCatSec:AddLabel("Subcategory tip: use Browser section buttons after picking a category")
-
--- Sub buttons (all common)
-for _, sub in ipairs({"Head", "Face", "Neck", "Shoulder", "Front", "Back", "Waist", "Hair", "Shirt", "Pants", "TShirt"}) do
-    SkinBrowseSec:AddButton({
-        Name = "Sub: " .. sub,
-        Callback = function()
-            SkinState.Sub = sub
-            pcall(function()
-                NeverLose:CreateNotification().new({ Title = "Skin changer", Content = "Sub: " .. sub, Duration = 1.5 })
-            end)
-        end
-    })
-end
-
-SkinBrowseSec:AddLabel("Search"):AddTextBox({
-    Default = "",
-    Flag = "Skin_Search",
-    Callback = function(v) SkinState.Query = tostring(v or "") end
-})
-SkinBrowseSec:AddLabel("Sort"):AddDropdown({
-    Default = "Relevance",
-    Values = {"Relevance", "MostFavorited", "PriceLow", "PriceHigh"},
-    Flag = "Skin_Sort",
-    Callback = function(v) SkinState.Sort = v end
-})
-SkinBrowseSec:AddButton({
-    Name = "Search Catalog",
-    Callback = function()
-        local results = searchCatalog(SkinState.Query, SkinState.Sub)
-        SkinState.Results = results
-        local n = #results
-        pcall(function()
-            NeverLose:CreateNotification().new({
-                Title = "Skin changer",
-                Content = "Found " .. tostring(n) .. " items — applying first matches as buttons below may refresh next search",
-                Duration = 3
-            })
-        end)
-        for i = 1, math.min(8, n) do
-            local item = results[i]
-            SkinBrowseSec:AddButton({
-                Name = tostring(item.Name):sub(1, 28),
-                Callback = function()
-                    local ok, err = applyAccessoryId(item.Id, SkinState.Sub)
-                    pcall(function()
-                        NeverLose:CreateNotification().new({
-                            Title = "Skin changer",
-                            Content = ok and ("Applied " .. tostring(item.Name)) or tostring(err),
-                            Duration = 2
-                        })
-                    end)
-                end
-            })
-        end
-    end
-})
-
-SkinBrowseSec:AddLabel("Copy User"):AddTextBox({
-    Default = Config.Skin_Username or "",
-    Flag = "Skin_Username",
-    Callback = function(v) Config.Skin_Username = tostring(v or "") end
-})
-SkinBrowseSec:AddButton({
-    Name = "Apply Full Avatar (Username)",
-    Callback = function()
-        local name = Config.Skin_Username
-        if not name or name == "" then return end
-        local id = ResolveUsernameToId(name)
-        if not id then return end
-        Config.Skin_UserId = id
-        local ok, msg = ApplySkinChanger(id)
-        pcall(function()
-            NeverLose:CreateNotification().new({
-                Title = "Skin changer",
-                Content = ok and ("Applied " .. name) or tostring(msg),
-                Duration = 3
-            })
-        end)
-    end
-})
-SkinBrowseSec:AddButton({
-    Name = "Apply Own Avatar",
-    Callback = function()
-        local ok, msg = ApplySkinChanger(player.UserId)
-        pcall(function()
-            NeverLose:CreateNotification().new({
-                Title = "Skin changer",
-                Content = ok and "Own skin applied" or tostring(msg),
-                Duration = 3
-            })
-        end)
-    end
-})
-
 -- ===================== Configs (manual) =====================
 local function ListConfigFiles()
     local names = {}
@@ -1965,6 +1600,17 @@ CfgSec:AddButton({
                 LoadConfig()
             end
         end)
+        -- re-apply runtime features after load
+        pcall(function()
+            if Config.AA_Enabled then StartAA() else StopAA() end
+            if Config.Aimbot_Enabled then StartAimbot() else StopAimbot() end
+            if Config.AutoJump then StartAutoJump() else StopAutoJump() end
+            if Config.ThirdPerson then StartThirdPerson() else StopThirdPerson() end
+            if Config.Freecam then StartFreecam() else StopFreecam() end
+            if Config.LoopFOV then StartLoopFOV() else StopLoopFOV() end
+            ApplyWorld()
+            RefreshChams()
+        end)
         pcall(function()
             NeverLose:CreateNotification().new({ Title = "Configs", Content = "Loaded " .. tostring(Config.ConfigName), Duration = 2 })
         end)
@@ -1987,7 +1633,6 @@ CfgSec:AddButton({
 
 FeatureState.AA = Config.AA_Enabled
 FeatureState.Aimbot = Config.Aimbot_Enabled
-FeatureState.Silent = Config.Aimbot_Silent
 FeatureState.ESP = Config.ESP_Enabled
 FeatureState.Bhop = Config.AutoJump
 FeatureState.ThirdPerson = Config.ThirdPerson
@@ -1997,7 +1642,7 @@ FeatureState.Freecam = Config.Freecam
 FeatureState.Ambient = Config.AmbientEnabled
 
 if Config.AA_Enabled then StartAA() end
-if Config.Aimbot_Enabled or Config.Aimbot_Silent then StartAimbot() end
+if Config.Aimbot_Enabled then StartAimbot() end
 if Config.AutoJump then StartAutoJump() end
 if Config.LoopWalkSpeed and Config.LoopWalkSpeed > 0 then StartWalkSpeedLoop() end
 if Config.LoopJumpPower and Config.LoopJumpPower > 0 then StartJumpPowerLoop() end

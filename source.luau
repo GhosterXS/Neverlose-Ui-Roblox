@@ -4342,6 +4342,7 @@ function NeverLose:CreateWindow(Config)
 
 	UserSettingButton.Name = NeverLose.RandomString();
 	UserSettingButton.Parent = BottomFrame
+	UserSettingButton.Visible = false
 	UserSettingButton.AnchorPoint = Vector2.new(1, 0.5)
 	UserSettingButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	UserSettingButton.BackgroundTransparency = 1.000
@@ -4369,6 +4370,7 @@ function NeverLose:CreateWindow(Config)
 	end)))
 
 	RightMenuFrame.Name = NeverLose.RandomString();
+	-- top config chip disabled (use Configs tab instead)
 	RightMenuFrame.Parent = WindowFrame
 	RightMenuFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 13)
 	RightMenuFrame.BackgroundTransparency = 0.600
@@ -4408,6 +4410,8 @@ function NeverLose:CreateWindow(Config)
 
 	ConfigFrame.Name = NeverLose.RandomString();
 	ConfigFrame.Parent = RightHeader
+	ConfigFrame.Visible = false
+	ConfigFrame.Size = UDim2.fromOffset(0, 0)
 	ConfigFrame.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigFrame.BackgroundColor3 = Color3.fromRGB(13, 17, 22)
 	ConfigFrame.BackgroundTransparency = 0.750
