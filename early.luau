@@ -5907,7 +5907,17 @@ function NeverLose:CreateWindow(Config)
 	end)));
 
 	function Window:ToggleInterface()
-		Window.Signal:SetValue(not Window.Signal:GetValue());
+		local open = not Window.Signal:GetValue();
+		Window.Signal:SetValue(open);
+
+		pcall(function()
+			local UIS = game:GetService("UserInputService")
+			if open then
+				UIS.MouseIconEnabled = true
+				UIS.MouseBehavior = Enum.MouseBehavior.Default
+			end
+			-- When closing, leave MouseBehavior to the hub/game (do not force unlock)
+		end)
 
 		if Window.__3DRender then
 			Window.Load3DBlock();

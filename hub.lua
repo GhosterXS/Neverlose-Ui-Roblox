@@ -125,9 +125,6 @@ local Config = {
     FogEnd = 1000,
     FogColor = {192, 192, 192},
 
-    Rage_AutoFire = false,
-    Rage_KillAura = false,
-    Rage_KillAuraRange = 15,
 
     Skin_UserId = 0,
     Skin_Username = "",
@@ -143,8 +140,6 @@ local Config = {
         Freecam = { Key = "None", Mode = "Toggle" },
         Ambient = { Key = "None", Mode = "Toggle" },
         Silent = { Key = "None", Mode = "Toggle" },
-        AutoFire = { Key = "None", Mode = "Toggle" },
-        KillAura = { Key = "None", Mode = "Toggle" },
     },
 }
 
@@ -187,14 +182,42 @@ local function AutoSave()
     SaveConfig()
 end
 
-local function UnlockMouse()
+local menuOpen = true -- window starts open
+local savedMouseBehavior = Enum.MouseBehavior.Default
+local savedMouseIcon = true
+
+local function CaptureMouseState()
     pcall(function()
-        UserInputService.MouseIconEnabled = true
-        UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-        if not Config.Freecam then
+        savedMouseBehavior = UserInputService.MouseBehavior
+        savedMouseIcon = UserInputService.MouseIconEnabled
+    end)
+end
+
+local function ApplyMenuMouse(open)
+    pcall(function()
+        if open then
+            -- Unlock so the UI is usable
+            UserInputService.MouseIconEnabled = true
             UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        else
+            -- Restore gameplay mouse (freecam keeps lock center)
+            if Config.Freecam then
+                UserInputService.MouseIconEnabled = false
+                UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+            else
+                UserInputService.MouseIconEnabled = savedMouseIcon
+                UserInputService.MouseBehavior = savedMouseBehavior
+                -- Default gameplay feel if capture was also Default
+                if savedMouseBehavior == Enum.MouseBehavior.Default and not Config.ThirdPerson then
+                    -- leave Default; many games use LockCenter in first person via camera scripts
+                end
+            end
         end
     end)
+end
+
+local function UnlockMouse()
+    ApplyMenuMouse(true)
 end
 
 local MouseMap = {
@@ -675,7 +698,7 @@ local function StartAimbot()
         elseif wantAim then
             MoveMouseToTarget(target)
         end
-        if Config.Rage_AutoFire and aimHeld then
+        if aimHeld and false then -- rage removed
             pcall(function()
                 VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
             end)
@@ -695,30 +718,6 @@ end
 
 local killAuraConn = nil
 local function StartKillAura()
-    if killAuraConn then killAuraConn:Disconnect() end
-    killAuraConn = RunService.Heartbeat:Connect(function()
-        if not Config.Rage_KillAura then return end
-        local localModel = GetLocalModel()
-        local hrp = localModel and localModel:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        for _, entry in ipairs(CollectTargets()) do
-            local root = entry.Model or entry.Char
-            if not root then continue end
-            local thrp = root:FindFirstChild("HumanoidRootPart") or root:FindFirstChildWhichIsA("BasePart")
-            local hum = root:FindFirstChildOfClass("Humanoid")
-            if thrp and hum and hum.Health > 0 then
-                if (thrp.Position - hrp.Position).Magnitude <= Config.Rage_KillAuraRange then
-                    pcall(function()
-                        hum:TakeDamage(0)
-                    end)
-                    pcall(function()
-                        local tool = localModel:FindFirstChildOfClass("Tool") or (player.Character and player.Character:FindFirstChildOfClass("Tool"))
-                        if tool then tool:Activate() end
-                    end)
-                end
-            end
-        end
-    end)
 end
 
 local function StopKillAura()
@@ -989,14 +988,21 @@ local function StartFreecam()
     if freecamConn then return end
     if Config.ThirdPerson then StopThirdPerson() end
     camera.CameraType = Enum.CameraType.Scriptable
-    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    if not menuOpen then
+        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    end
     local look = camera.CFrame.LookVector
     freecamYaw = math.atan2(-look.X, -look.Z)
     freecamPitch = math.asin(math.clamp(look.Y, -1, 1))
     freecamConn = RunService.RenderStepped:Connect(function(dt)
         if not Config.Freecam then return end
         ForceLocalVisible()
-        UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+        if menuOpen then
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+            UserInputService.MouseIconEnabled = true
+        else
+            UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+        end
         local delta = UserInputService:GetMouseDelta()
         freecamYaw = freecamYaw - delta.X * 0.0035
         freecamPitch = math.clamp(freecamPitch - delta.Y * 0.0035, math.rad(-89), math.rad(89))
@@ -1221,14 +1227,6 @@ local function ApplyFeature(name, on)
     elseif name == "Ambient" then
         Config.AmbientEnabled = on
         ApplyWorld()
-    elseif name == "AutoFire" then
-        Config.Rage_AutoFire = on
-        if on and not (Config.Aimbot_Enabled or Config.Aimbot_Silent) then
-            StartAimbot()
-        end
-    elseif name == "KillAura" then
-        Config.Rage_KillAura = on
-        if on then StartKillAura() else StopKillAura() end
     end
     AutoSave()
 end
@@ -1289,18 +1287,17 @@ RunService.RenderStepped:Connect(function()
     if Config.ThirdPerson or Config.Freecam then ForceLocalVisible() end
 end)
 
--- unlock mouse while menu likely open (Insert toggles UI)
-local menuOpenHint = true
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Insert then
-        task.defer(UnlockMouse)
-        menuOpenHint = true
-    end
-end)
-
-RunService.Heartbeat:Connect(function()
-    if menuOpenHint and not Config.Freecam then
-        UnlockMouse()
+-- Mouse is only forced unlocked while the menu is open.
+-- When closed, gameplay / freecam mouse lock is restored.
+RunService.RenderStepped:Connect(function()
+    if menuOpen and not Config.Freecam then
+        -- Keep unlocked only while menu is open (do not touch freecam lock while closed)
+        if UserInputService.MouseBehavior ~= Enum.MouseBehavior.Default then
+            UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+        end
+        if not UserInputService.MouseIconEnabled then
+            UserInputService.MouseIconEnabled = true
+        end
     end
 end)
 
@@ -1334,14 +1331,28 @@ pcall(function()
     local oldToggle = Window.ToggleInterface
     if typeof(oldToggle) == "function" then
         function Window:ToggleInterface(...)
+            local wasOpen = menuOpen
+            if not wasOpen then
+                CaptureMouseState()
+            end
             oldToggle(self, ...)
-            UnlockMouse()
-            menuOpenHint = true
-            task.defer(UnlockMouse)
+            -- Prefer library signal if available
+            local open = true
+            pcall(function()
+                if self.Signal and self.Signal.GetValue then
+                    open = self.Signal:GetValue() and true or false
+                else
+                    open = not wasOpen
+                end
+            end)
+            menuOpen = open
+            ApplyMenuMouse(open)
         end
     end
 end)
-UnlockMouse()
+CaptureMouseState()
+menuOpen = true
+ApplyMenuMouse(true)
 
 local function storeKey(name)
     return function(v)
@@ -1372,7 +1383,6 @@ local function bindFeature(label, name, defaultOn, flag)
 end
 
 Window:AddTabLabel("MAIN")
-local RageTab = Window:AddTab({ Icon = "swords", Name = "Rage" })
 local LegitTab = Window:AddTab({ Icon = "crosshairs", Name = "Legit" })
 local AATab = Window:AddTab({ Icon = "reload", Name = "Anti-Aim" })
 local Visuals = Window:AddTab({ Icon = "eye", Name = "Visuals" })
@@ -1381,7 +1391,6 @@ local MiscTab = Window:AddTab({ Icon = "cube", Name = "Misc" })
 local WorldTab = Window:AddTab({ Icon = "globe", Name = "World" })
 local SkinTab = Window:AddTab({ Icon = "user", Name = "Skins" })
 
-local RageSec = RageTab:AddSection({ Name = "RAGE", Position = "left" })
 local AimSec = LegitTab:AddSection({ Name = "AIMBOT", Position = "left" })
 local SilentSec = LegitTab:AddSection({ Name = "SILENT", Position = "right" })
 local AASec = AATab:AddSection({ Name = "ANTI-AIM", Position = "left" })
@@ -1394,14 +1403,6 @@ local EnvSec = WorldTab:AddSection({ Name = "LIGHTING", Position = "left" })
 local FxSec = WorldTab:AddSection({ Name = "EFFECTS", Position = "right" })
 local SkinSec = SkinTab:AddSection({ Name = "SKIN CHANGER", Position = "left" })
 
-local afLabel = RageSec:AddLabel("Auto Fire")
-bindFeature(afLabel, "AutoFire", Config.Rage_AutoFire, "Rage_AutoFire")
-local kaLabel = RageSec:AddLabel("Kill Aura")
-bindFeature(kaLabel, "KillAura", Config.Rage_KillAura, "Rage_KillAura")
-RageSec:AddLabel("Kill Aura Range"):AddSlider({
-    Min = 5, Max = 50, Default = Config.Rage_KillAuraRange, Flag = "KA_Range",
-    Callback = function(v) Config.Rage_KillAuraRange = v AutoSave() end
-})
 
 local aimLabel = AimSec:AddLabel("Enabled")
 bindFeature(aimLabel, "Aimbot", Config.Aimbot_Enabled, "Aimbot_Enabled")
@@ -1685,18 +1686,15 @@ FeatureState.LoopFOV = Config.LoopFOV
 FeatureState.LocalChams = Config.LocalChams
 FeatureState.Freecam = Config.Freecam
 FeatureState.Ambient = Config.AmbientEnabled
-FeatureState.AutoFire = Config.Rage_AutoFire
-FeatureState.KillAura = Config.Rage_KillAura
 
 if Config.AA_Enabled then StartAA() end
-if Config.Aimbot_Enabled or Config.Aimbot_Silent or Config.Rage_AutoFire then StartAimbot() end
+if Config.Aimbot_Enabled or Config.Aimbot_Silent then StartAimbot() end
 if Config.AutoJump then StartAutoJump() end
 if Config.LoopWalkSpeed and Config.LoopWalkSpeed > 0 then StartWalkSpeedLoop() end
 if Config.LoopJumpPower and Config.LoopJumpPower > 0 then StartJumpPowerLoop() end
 if Config.ThirdPerson then StartThirdPerson() end
 if Config.LoopFOV then StartLoopFOV() end
 if Config.Freecam then StartFreecam() end
-if Config.Rage_KillAura then StartKillAura() end
 ApplyWorld()
 RefreshChams()
 UnlockMouse()
