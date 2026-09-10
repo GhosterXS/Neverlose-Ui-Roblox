@@ -565,11 +565,9 @@ pcall(function()
     introGui:SetAttribute("NL_HUB", true)
     introGui.Parent = guiParent
 
-    -- Full-screen dark semi-transparent background
+    -- Full-screen dark dim
     local bg = Instance.new("Frame")
-    bg.Name = "Dim"
     bg.Size = UDim2.fromScale(1, 1)
-    bg.Position = UDim2.fromScale(0, 0)
     bg.BorderSizePixel = 0
     bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     bg.BackgroundTransparency = 1
@@ -579,117 +577,97 @@ pcall(function()
     local label = Instance.new("TextLabel")
     label.AnchorPoint = Vector2.new(0.5, 0.5)
     label.Position = UDim2.fromScale(0.5, 0.5)
-    label.Size = UDim2.fromOffset(420, 52)
+    label.Size = UDim2.fromOffset(400, 48)
     label.BackgroundTransparency = 1
     label.Text = "Neverlose"
     label.Font = Enum.Font.GothamBold
-    label.TextSize = 34
+    label.TextSize = 32
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextTransparency = 1
-    label.ZIndex = 20
+    label.ZIndex = 30
     label.Parent = introGui
 
-    -- Soft text glow layers
-    for i, tr in ipairs({0.75, 0.85}) do
-        local glow = label:Clone()
-        glow.TextTransparency = 1
-        glow.ZIndex = 19 - i
-        glow.TextColor3 = Color3.fromRGB(200, 220, 255)
-        glow.Parent = introGui
-        glow:SetAttribute("Glow", true)
+    local function softLine(dir)
+        -- dir: -1 left, +1 right
+        local holder = Instance.new("Frame")
+        holder.AnchorPoint = Vector2.new(dir < 0 and 1 or 0, 0.5)
+        holder.Position = UDim2.new(0.5, dir * 105, 0.5, 0)
+        holder.Size = UDim2.fromOffset(0, 14)
+        holder.BackgroundTransparency = 1
+        holder.BorderSizePixel = 0
+        holder.ZIndex = 20
+        holder.Parent = introGui
+
+        -- Soft bloom (single outer glow)
+        local glow = Instance.new("Frame")
+        glow.AnchorPoint = Vector2.new(0, 0.5)
+        glow.Position = UDim2.new(0, 0, 0.5, 0)
+        glow.Size = UDim2.new(1, 0, 0, 8)
+        glow.BorderSizePixel = 0
+        glow.BackgroundColor3 = Color3.fromRGB(220, 235, 255)
+        glow.BackgroundTransparency = 1
+        glow.ZIndex = 21
+        glow.Parent = holder
+        local gc = Instance.new("UICorner")
+        gc.CornerRadius = UDim.new(1, 0)
+        gc.Parent = glow
+        local ggrad = Instance.new("UIGradient")
+        ggrad.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.5, 0.35),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+        ggrad.Parent = glow
+
+        -- Core sharp line
+        local core = Instance.new("Frame")
+        core.AnchorPoint = Vector2.new(0, 0.5)
+        core.Position = UDim2.new(0, 0, 0.5, 0)
+        core.Size = UDim2.new(1, 0, 0, 1)
+        core.BorderSizePixel = 0
+        core.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        core.BackgroundTransparency = 1
+        core.ZIndex = 22
+        core.Parent = holder
+        local cc = Instance.new("UICorner")
+        cc.CornerRadius = UDim.new(1, 0)
+        cc.Parent = core
+
+        return holder, glow, core
     end
 
-    local function makeBloomLine(side)
-        -- side: -1 left, 1 right
-        local root = Instance.new("Frame")
-        root.AnchorPoint = Vector2.new(side < 0 and 1 or 0, 0.5)
-        root.Position = UDim2.new(0.5, side * 115, 0.5, 0)
-        root.Size = UDim2.fromOffset(0, 2)
-        root.BorderSizePixel = 0
-        root.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        root.BackgroundTransparency = 1
-        root.ZIndex = 15
-        root.Parent = introGui
+    local leftH, leftGlow, leftCore = softLine(-1)
+    local rightH, rightGlow, rightCore = softLine(1)
 
-        -- Bloom layers (larger, more transparent)
-        local blooms = {}
-        for i, data in ipairs({
-            {h = 10, tr = 0.82, z = 12},
-            {h = 6,  tr = 0.70, z = 13},
-            {h = 4,  tr = 0.55, z = 14},
-        }) do
-            local b = Instance.new("Frame")
-            b.AnchorPoint = Vector2.new(side < 0 and 1 or 0, 0.5)
-            b.Position = UDim2.new(0.5, side * 115, 0.5, 0)
-            b.Size = UDim2.fromOffset(0, data.h)
-            b.BorderSizePixel = 0
-            b.BackgroundColor3 = Color3.fromRGB(180, 210, 255)
-            b.BackgroundTransparency = 1
-            b.ZIndex = data.z
-            b.Parent = introGui
-            local c = Instance.new("UICorner")
-            c.CornerRadius = UDim.new(1, 0)
-            c.Parent = b
-            table.insert(blooms, {frame = b, targetTr = data.tr, h = data.h})
-        end
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(1, 0)
-        corner.Parent = root
-        return root, blooms
-    end
+    TweenService:Create(bg, TweenInfo.new(0.4), { BackgroundTransparency = 0.4 }):Play()
+    TweenService:Create(label, TweenInfo.new(0.5), { TextTransparency = 0 }):Play()
 
-    local left, leftBloom = makeBloomLine(-1)
-    local right, rightBloom = makeBloomLine(1)
+    local expand = TweenInfo.new(0.7, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    TweenService:Create(leftH, expand, { Size = UDim2.fromOffset(145, 14) }):Play()
+    TweenService:Create(rightH, expand, { Size = UDim2.fromOffset(145, 14) }):Play()
+    TweenService:Create(leftGlow, expand, { BackgroundTransparency = 0.55 }):Play()
+    TweenService:Create(rightGlow, expand, { BackgroundTransparency = 0.55 }):Play()
+    TweenService:Create(leftCore, expand, { BackgroundTransparency = 0.1 }):Play()
+    TweenService:Create(rightCore, expand, { BackgroundTransparency = 0.1 }):Play()
 
-    -- Fade in dark background
-    TweenService:Create(bg, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { BackgroundTransparency = 0.35 }):Play()
-    TweenService:Create(label, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { TextTransparency = 0 }):Play()
-    for _, child in ipairs(introGui:GetChildren()) do
-        if child:IsA("TextLabel") and child:GetAttribute("Glow") then
-            TweenService:Create(child, TweenInfo.new(0.5), { TextTransparency = 0.8 }):Play()
-        end
-    end
-
-    -- Expand lines + bloom
-    TweenService:Create(left, TweenInfo.new(0.65, Enum.EasingStyle.Quad), {
-        Size = UDim2.fromOffset(150, 2), BackgroundTransparency = 0.05
-    }):Play()
-    TweenService:Create(right, TweenInfo.new(0.65, Enum.EasingStyle.Quad), {
-        Size = UDim2.fromOffset(150, 2), BackgroundTransparency = 0.05
-    }):Play()
-    for _, pack in ipairs({leftBloom, rightBloom}) do
-        for _, b in ipairs(pack) do
-            TweenService:Create(b.frame, TweenInfo.new(0.65, Enum.EasingStyle.Quad), {
-                Size = UDim2.fromOffset(160, b.h),
-                BackgroundTransparency = b.targetTr
-            }):Play()
-        end
-    end
-
-    task.delay(1.55, function()
-        TweenService:Create(bg, TweenInfo.new(0.45), { BackgroundTransparency = 1 }):Play()
-        TweenService:Create(label, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
-        for _, child in ipairs(introGui:GetChildren()) do
-            if child:IsA("TextLabel") then
-                TweenService:Create(child, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
-            end
-        end
-        TweenService:Create(left, TweenInfo.new(0.4), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
-        TweenService:Create(right, TweenInfo.new(0.4), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
-        for _, pack in ipairs({leftBloom, rightBloom}) do
-            for _, b in ipairs(pack) do
-                TweenService:Create(b.frame, TweenInfo.new(0.4), {
-                    BackgroundTransparency = 1,
-                    Size = UDim2.fromOffset(0, b.h)
-                }):Play()
-            end
-        end
+    task.delay(1.6, function()
+        local fade = TweenInfo.new(0.45, Enum.EasingStyle.Quad)
+        TweenService:Create(bg, fade, { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(label, fade, { TextTransparency = 1 }):Play()
+        TweenService:Create(leftGlow, fade, { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(rightGlow, fade, { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(leftCore, fade, { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(rightCore, fade, { BackgroundTransparency = 1 }):Play()
+        TweenService:Create(leftH, fade, { Size = UDim2.fromOffset(0, 14) }):Play()
+        TweenService:Create(rightH, fade, { Size = UDim2.fromOffset(0, 14) }):Play()
         task.delay(0.5, function()
             pcall(function() introGui:Destroy() end)
             getgenv().NL_INTRO_DONE = true
         end)
     end)
 end)
+
+
 
 
 
@@ -1563,7 +1541,7 @@ do
     pcall(function()
         if NeverLose.ScreenGui then
             NeverLose.ScreenGui:SetAttribute("NL_HUB", true)
-            NeverLose.ScreenGui.Enabled = false -- keep fully off until intro ends
+            NeverLose.ScreenGui.Enabled = true
         end
     end)
 end
@@ -1598,7 +1576,7 @@ getgenv().NL_ALLOW_UI = false
 pcall(function()
     if Window.Signal then Window.Signal:SetValue(false) end
     if Window.SetRender then Window:SetRender(false) end
-    if NeverLose.ScreenGui then NeverLose.ScreenGui.Enabled = false end
+    -- keep ScreenGui enabled so layout/AbsoluteSize work for controls
 end)
 -- Kill github source forced open (task.delay 0.25 SetRender true)
 task.spawn(function()
@@ -1905,6 +1883,7 @@ local function ListConfigFiles()
     return names
 end
 
+pcall(function() -- configs tab (isolated so errors never block UI open)
 Config.ConfigName = Config.ConfigName or "default"
 
 CfgSec:AddLabel("Config Name"):AddTextBox({
@@ -1964,6 +1943,8 @@ CfgSec:AddButton({
     end
 })
 
+end)
+
 FeatureState.AA = Config.AA_Enabled
 FeatureState.Aimbot = Config.Aimbot_Enabled
 FeatureState.ESP = Config.ESP_Enabled
@@ -1984,36 +1965,62 @@ if Config.LoopFOV then StartLoopFOV() end
 if Config.Freecam then StartFreecam() end
 ApplyWorld()
 RefreshChams()
--- Show UI only after intro finishes — re-enable current tab so buttons appear
+-- Open menu ONLY after intro is done
 task.spawn(function()
     local t0 = os.clock()
-    while not getgenv().NL_INTRO_DONE and (os.clock() - t0) < 5 do
+    while not getgenv().NL_INTRO_DONE and (os.clock() - t0) < 4 do
         task.wait(0.05)
     end
-    task.wait(0.15)
+    task.wait(0.2)
     getgenv().NL_ALLOW_UI = true
-    pcall(function()
+
+    local function openUI()
         if not Window then return end
-        if NeverLose.ScreenGui then
-            NeverLose.ScreenGui.Enabled = true
-        end
-        -- Open window signal (propagates to tabs/controls)
-        if Window.Signal then
-            Window.Signal:SetValue(true)
-        end
-        if Window.SetRender then
-            Window:SetRender(true)
-        end
-        -- Explicitly refresh active tab so toggles/buttons SetRender(true)
-        if type(Window.Tabs) == "table" then
+        pcall(function()
+            if NeverLose.ScreenGui then
+                NeverLose.ScreenGui.Enabled = true
+            end
+        end)
+        -- Use library toggle if currently closed
+        pcall(function()
+            if Window.Signal and not Window.Signal:GetValue() then
+                if Window.ToggleInterface then
+                    Window:ToggleInterface()
+                else
+                    Window.Signal:SetValue(true)
+                end
+            elseif Window.Signal then
+                Window.Signal:SetValue(true)
+            end
+        end)
+        pcall(function()
+            if Window.SetRender then Window:SetRender(true) end
+        end)
+        -- Force-select first tab so section controls receive SetRender(true)
+        pcall(function()
+            if type(Window.Tabs) ~= "table" or #Window.Tabs == 0 then return end
             local idx = Window.CurrentTab or 1
+            if idx < 1 or idx > #Window.Tabs then idx = 1 end
+            Window.CurrentTab = idx
             for i, tab in ipairs(Window.Tabs) do
                 if tab and tab.SetValue then
                     tab.SetValue(i == idx)
                 end
             end
-        end
-    end)
-    menuOpen = true
-    ApplyMenuMouse(true)
+        end)
+        menuOpen = true
+        ApplyMenuMouse(true)
+    end
+
+    local ok, err = pcall(openUI)
+    if not ok then
+        warn("[Neverlose] openUI failed:", err)
+        -- last resort
+        pcall(function()
+            if Window and Window.Signal then Window.Signal:SetValue(true) end
+            if Window and Window.SetRender then Window:SetRender(true) end
+            menuOpen = true
+            ApplyMenuMouse(true)
+        end)
+    end
 end)

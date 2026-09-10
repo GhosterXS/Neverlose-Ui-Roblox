@@ -3873,7 +3873,8 @@ function NeverLose:CreateWindow(Config)
 		Content = Config.Content,
 		Size = Config.Size,
 		ConfigFolder = Config.ConfigFolder,
-		Signal = NeverLose:CreateSignal(false),
+		-- Start true so controls initialize visible, hub closes until intro ends
+		Signal = NeverLose:CreateSignal(true),
 		Tabs = {},
 		CurrentTab = 1,
 		Keybind = Config.Keybind,
@@ -6167,6 +6168,10 @@ function NeverLose:CreateWindow(Config)
 		return Watermark_lb;
 	end;
 
+	-- Start closed for intro; controls already built while Signal was true
+	pcall(function()
+		Window.Signal:SetValue(false);
+	end);
 	Window:SetRender(false);
 
 	return Window;
