@@ -3,6 +3,7 @@
 ]]
 
 local REPO_UI = "https://raw.githubusercontent.com/GhosterXS/Neverlose-Ui-Roblox/main/source.luau"
+local REPO_UI_FALLBACK = "https://raw.githubusercontent.com/4lpaca-pin/NeverLose/refs/heads/main/source.luau"
 
 local function LoadNeverLoseUI()
     local candidates = {
@@ -10,9 +11,7 @@ local function LoadNeverLoseUI()
         "source.lua",
         "Neverlose/source.luau",
         "Neverlose-Ui-Roblox/source.luau",
-        "workspace/source.luau",
     }
-    -- Prefer LOCAL patched source (copy source.luau next to hub.lua)
     if type(isfile) == "function" and type(readfile) == "function" then
         for _, path in ipairs(candidates) do
             local ok, body = pcall(function()
@@ -20,7 +19,7 @@ local function LoadNeverLoseUI()
                 return nil
             end)
             if ok and type(body) == "string" and #body > 100 then
-                local fn, err = loadstring(body)
+                local fn = loadstring(body)
                 if fn then
                     local ok2, res = pcall(fn)
                     if ok2 and res then
@@ -31,14 +30,19 @@ local function LoadNeverLoseUI()
             end
         end
     end
-    -- Fallback: GitHub (unpatched)
-    local src = game:HttpGet(REPO_UI)
-    assert(type(src) == "string" and #src > 100, "UI download empty")
-    local fn, err = loadstring(src)
-    assert(fn, tostring(err))
-    local res = fn()
-    warn("[Neverlose] Loaded UI from GitHub (put source.luau next to hub for patches)")
-    return res
+    for _, url in ipairs({REPO_UI, REPO_UI_FALLBACK}) do
+        local ok, res = pcall(function()
+            local src = game:HttpGet(url)
+            assert(type(src) == "string" and #src > 100)
+            local fn = assert(loadstring(src))
+            return fn()
+        end)
+        if ok and res then
+            print("[Neverlose] Loaded UI from:", url)
+            return res
+        end
+    end
+    error("Failed to load Neverlose UI")
 end
 
 local NeverLose
@@ -51,7 +55,6 @@ do
     NeverLose = res
     pcall(function()
         NeverLose.UnloadEnabled = true
-        -- DepthOfField blur often shows without the window; disable it
         NeverLose.EnabledBlur = false
         getgenv().NeverLose = NeverLose
     end)
@@ -1543,8 +1546,26 @@ do
     pcall(function()
         if NeverLose.ScreenGui then
             NeverLose.ScreenGui:SetAttribute("NL_HUB", true)
-            NeverLose.ScreenGui.Enabled = true
         end
+    end)
+end
+
+-- Gate: library auto-opens at 0.25s; block until intro finishes
+getgenv().NL_ALLOW_UI = false
+do
+    local rawSetRender = Window.SetRender
+    function Window:SetRender(value)
+        if value == true and not getgenv().NL_ALLOW_UI then
+            value = false
+        end
+        if type(rawSetRender) == "function" then
+            return rawSetRender(self, value)
+        end
+    end
+    -- Force closed now
+    pcall(function()
+        if Window.Signal then Window.Signal:SetValue(false) end
+        rawSetRender(Window, false)
     end)
 end
 
@@ -1552,47 +1573,22 @@ pcall(function()
     local oldToggle = Window.ToggleInterface
     if typeof(oldToggle) == "function" then
         function Window:ToggleInterface(...)
+            if not getgenv().NL_ALLOW_UI then return end
             local wasOpen = menuOpen
-            if not wasOpen then
-                CaptureMouseState()
-            end
+            if not wasOpen then CaptureMouseState() end
             oldToggle(self, ...)
-            -- Prefer library signal if available
-            local open = true
+            local open = false
             pcall(function()
-                if self.Signal and self.Signal.GetValue then
-                    open = self.Signal:GetValue() and true or false
-                else
-                    open = not wasOpen
-                end
+                open = self.Signal and self.Signal:GetValue() or false
             end)
-            menuOpen = open
-            ApplyMenuMouse(open)
+            menuOpen = open and true or false
+            ApplyMenuMouse(menuOpen)
         end
     end
 end)
 CaptureMouseState()
 menuOpen = false
 ApplyMenuMouse(false)
-getgenv().NL_ALLOW_UI = false
-pcall(function()
-    if Window.Signal then Window.Signal:SetValue(false) end
-    if Window.SetRender then Window:SetRender(false) end
-    -- keep ScreenGui enabled so layout/AbsoluteSize work for controls
-end)
--- Kill github source forced open (task.delay 0.25 SetRender true)
-task.spawn(function()
-    for _ = 1, 12 do
-        task.wait(0.05)
-        if getgenv().NL_ALLOW_UI then return end
-        pcall(function()
-            if Window.Signal and Window.Signal:GetValue() then
-                Window.Signal:SetValue(false)
-            end
-            if Window.SetRender then Window:SetRender(false) end
-        end)
-    end
-end)
 
 local function storeKey(name)
     return function(v)
@@ -1973,79 +1969,33 @@ task.spawn(function()
     while not getgenv().NL_INTRO_DONE and (os.clock() - t0) < 4 do
         task.wait(0.05)
     end
-    task.wait(0.2)
+    task.wait(0.15)
+
     getgenv().NL_ALLOW_UI = true
 
-    local function openUI()
+    pcall(function()
+        -- destroy residual blur FX
+        for _, fx in ipairs(game:GetService("Lighting"):GetChildren()) do
+            if fx:IsA("DepthOfFieldEffect") then
+                pcall(function() fx:Destroy() end)
+            end
+        end
+    end)
+
+    pcall(function()
         if not Window then return end
-
-        -- Kill any leftover DepthOfField from blur module
-        pcall(function()
-            for _, fx in ipairs(game:GetService("Lighting"):GetChildren()) do
-                if fx:IsA("DepthOfFieldEffect") then
-                    fx.Enabled = false
-                    fx:Destroy()
-                end
-            end
-        end)
-
-        pcall(function()
-            if NeverLose.ScreenGui then
-                NeverLose.ScreenGui.Enabled = true
-            end
-            NeverLose.EnabledBlur = false
-        end)
-
-        -- Open signal + render
-        pcall(function()
-            if Window.Signal then
-                Window.Signal:SetValue(true)
-            end
-            if Window.SetRender then
-                Window:SetRender(true)
-            end
-        end)
-
-        -- Force main window frame visible (library may leave Parent=nil)
-        pcall(function()
-            local sg = NeverLose.ScreenGui
-            if not sg then return end
-            for _, child in ipairs(sg:GetChildren()) do
-                if child:IsA("Frame") and child.AbsoluteSize.X > 200 then
-                    child.Visible = true
-                    child.Parent = sg
-                    child.BackgroundTransparency = 0.03
-                    child.Position = UDim2.fromScale(0.5, 0.5)
-                    child.AnchorPoint = Vector2.new(0.5, 0.5)
-                end
-            end
-        end)
-
-        -- Select first tab so controls show
-        pcall(function()
-            if type(Window.Tabs) ~= "table" or #Window.Tabs == 0 then return end
-            local idx = 1
-            Window.CurrentTab = idx
+        if Window.Signal then Window.Signal:SetValue(true) end
+        if Window.SetRender then Window:SetRender(true) end
+        if type(Window.Tabs) == "table" then
+            local idx = Window.CurrentTab or 1
             for i, tab in ipairs(Window.Tabs) do
                 if tab and tab.SetValue then
                     tab.SetValue(i == idx)
                 end
             end
-        end)
+        end
+    end)
 
-        menuOpen = true
-        ApplyMenuMouse(true)
-    end
-
-    local ok, err = pcall(openUI)
-    if not ok then
-        warn("[Neverlose] openUI failed:", err)
-        -- last resort
-        pcall(function()
-            if Window and Window.Signal then Window.Signal:SetValue(true) end
-            if Window and Window.SetRender then Window:SetRender(true) end
-            menuOpen = true
-            ApplyMenuMouse(true)
-        end)
-    end
+    menuOpen = true
+    ApplyMenuMouse(true)
 end)
