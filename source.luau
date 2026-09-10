@@ -3923,17 +3923,15 @@ function NeverLose:CreateWindow(Config)
 	WindowFrame.Parent = NeverLose.ScreenGui;
 	WindowFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	WindowFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 13)
-	WindowFrame.BackgroundTransparency = 0.055
+	-- Start fully hidden; hub opens after intro
+	WindowFrame.BackgroundTransparency = 1
+	WindowFrame.Visible = false
 	WindowFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	WindowFrame.BorderSizePixel = 0
 	WindowFrame.ClipsDescendants = true
-	WindowFrame.Position = UDim2.new(255, 0, 255, 0)
+	WindowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	WindowFrame.Size = Window.Size
 	WindowFrame.Active = true;
-
-	if not NeverLose.EnabledBlur then
-		WindowFrame.BackgroundTransparency = 0.0255
-	end;
 
 	local renderParentWindow = LPH_NO_VIRTUALIZE(function()
 		if Window.__3DRender then
@@ -3966,6 +3964,8 @@ function NeverLose:CreateWindow(Config)
 
 	Window.SetRender = LPH_NO_VIRTUALIZE(function(self , value)
 		if value then
+			WindowFrame.Visible = true
+			WindowFrame.Parent = NeverLose.ScreenGui
 			NeverLose.PlayAnimate(WindowFrame , SlowyTween , {
 				BackgroundTransparency = (NeverLose.EnabledBlur and 0.055) or 0.0255,
 				Size = Window.Size
@@ -4146,14 +4146,14 @@ function NeverLose:CreateWindow(Config)
 	Window.Shadow = NeverLose:CreateShadow(WindowFrame);
 	Window.Shadow:Render(false);
 
-	task.delay(0.25,function()
-		WindowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-		-- Respect Signal: do NOT force open (was causing empty menu before intro ended)
-		NeverLose:AddSignal(Window.Signal:Connect(LPH_NO_VIRTUALIZE(function(...)
-			Window:SetRender(...);
-		end)))
-		Window:SetRender(Window.Signal:GetValue());
-	end)
+	-- Connect Signal once; start closed (hub opens after intro)
+	NeverLose:AddSignal(Window.Signal:Connect(LPH_NO_VIRTUALIZE(function(...)
+		Window:SetRender(...);
+	end)))
+	WindowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+	WindowFrame.Visible = false
+	WindowFrame.BackgroundTransparency = 1
+	Window:SetRender(false);
 
 	if NeverLose.EnabledBlur then
 		NeverLose:CreateBlurModule(WindowFrame,Window.Signal);

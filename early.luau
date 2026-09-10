@@ -1,5 +1,4 @@
 --[[
-    This is early release source
                           Neverlose.cc UI Library
     Author: 4lpaca
 	License: MIT
@@ -1695,6 +1694,12 @@ NeverLose.KeyEnum = {
 	LeftAlt = "LAlt",
 	RightAlt = "RAlt",
 	Escape = "Esc",
+	None = "None",
+	M1B = "M1",
+	M2B = "M2",
+	M3B = "M3",
+	M4B = "M4",
+	M5B = "M5",
 };
 
 NeverLose.EnumReverse = {};
@@ -2299,6 +2304,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		ColorPicker.ClipsDescendants = true
 		ColorPicker.Size = UDim2.new(0, 18, 0, 18)
 		ColorPicker.ZIndex = ZINdex + 13
+		ColorPicker.LayoutOrder = -(#Handler:GetChildren() + 5);
 
 		UICorner.CornerRadius = UDim.new(0, 4)
 		UICorner.Parent = ColorPicker
@@ -2423,6 +2429,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		Keybind.ClipsDescendants = true
 		Keybind.Size = UDim2.new(0, 45, 0, 18)
 		Keybind.ZIndex = ZINdex + 13
+		Keybind.LayoutOrder = -(#Handler:GetChildren() + 5);
 
 		UICorner.CornerRadius = UDim.new(0, 4)
 		UICorner.Parent = Keybind
@@ -2510,13 +2517,22 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			while not Selected do
 				local Key = UserInputService.InputBegan:Wait();
 
-				if Key.KeyCode ~= Enum.KeyCode.Unknown and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
+				if Key.KeyCode == Enum.KeyCode.Escape then
+					Selected = "None";
+				elseif Key.KeyCode ~= Enum.KeyCode.Unknown and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
 					Selected = Key.KeyCode;
 				else
-					if Key.UserInputType == Enum.UserInputType.MouseButton1 and not IsBlacklist(Enum.UserInputType.MouseButton1) and not IsBlacklist("M1B") then
+					local uit = Key.UserInputType;
+					if uit == Enum.UserInputType.MouseButton1 and not IsBlacklist(uit) and not IsBlacklist("M1B") then
 						Selected = "M1B";
-					elseif Key.UserInputType == Enum.UserInputType.MouseButton2 and not IsBlacklist(Enum.UserInputType.MouseButton2) and not IsBlacklist("M2B") then
+					elseif uit == Enum.UserInputType.MouseButton2 and not IsBlacklist(uit) and not IsBlacklist("M2B") then
 						Selected = "M2B";
+					elseif uit == Enum.UserInputType.MouseButton3 and not IsBlacklist(uit) and not IsBlacklist("M3B") then
+						Selected = "M3B";
+					elseif uit == Enum.UserInputType.MouseButton4 and not IsBlacklist(uit) and not IsBlacklist("M4B") then
+						Selected = "M4B";
+					elseif uit == Enum.UserInputType.MouseButton5 and not IsBlacklist(uit) and not IsBlacklist("M5B") then
+						Selected = "M5B";
 					end;
 				end;
 			end;
@@ -2577,6 +2593,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		TextInput.ClipsDescendants = true
 		TextInput.Size = UDim2.new(0, Config.Size, 0, 18)
 		TextInput.ZIndex = ZINdex + 13
+		TextInput.LayoutOrder = -(#Handler:GetChildren() + 5);
 
 		UICorner.CornerRadius = UDim.new(0, 4)
 		UICorner.Parent = TextInput
@@ -2691,6 +2708,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 		Dropdown.ClipsDescendants = true
 		Dropdown.Size = UDim2.new(0, Config.Size, 0, 18)
 		Dropdown.ZIndex = ZINdex + 13
+		Dropdown.LayoutOrder = -(#Handler:GetChildren() + 5);
 
 		DropdownIcon.Name = NeverLose.RandomString();
 		DropdownIcon.Parent = Dropdown
@@ -3905,17 +3923,15 @@ function NeverLose:CreateWindow(Config)
 	WindowFrame.Parent = NeverLose.ScreenGui;
 	WindowFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	WindowFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 13)
-	WindowFrame.BackgroundTransparency = 0.055
+	-- Start fully hidden; hub opens after intro
+	WindowFrame.BackgroundTransparency = 1
+	WindowFrame.Visible = false
 	WindowFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 	WindowFrame.BorderSizePixel = 0
 	WindowFrame.ClipsDescendants = true
-	WindowFrame.Position = UDim2.new(255, 0, 255, 0)
+	WindowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	WindowFrame.Size = Window.Size
 	WindowFrame.Active = true;
-
-	if not NeverLose.EnabledBlur then
-		WindowFrame.BackgroundTransparency = 0.0255
-	end;
 
 	local renderParentWindow = LPH_NO_VIRTUALIZE(function()
 		if Window.__3DRender then
@@ -3948,6 +3964,8 @@ function NeverLose:CreateWindow(Config)
 
 	Window.SetRender = LPH_NO_VIRTUALIZE(function(self , value)
 		if value then
+			WindowFrame.Visible = true
+			WindowFrame.Parent = NeverLose.ScreenGui
 			NeverLose.PlayAnimate(WindowFrame , SlowyTween , {
 				BackgroundTransparency = (NeverLose.EnabledBlur and 0.055) or 0.0255,
 				Size = Window.Size
@@ -4128,14 +4146,14 @@ function NeverLose:CreateWindow(Config)
 	Window.Shadow = NeverLose:CreateShadow(WindowFrame);
 	Window.Shadow:Render(false);
 
-	task.delay(0.25,function()
-		WindowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-		-- Respect Signal: do NOT force open (was causing empty menu before intro ended)
-		NeverLose:AddSignal(Window.Signal:Connect(LPH_NO_VIRTUALIZE(function(...)
-			Window:SetRender(...);
-		end)))
-		Window:SetRender(Window.Signal:GetValue());
-	end)
+	-- Connect Signal once; start closed (hub opens after intro)
+	NeverLose:AddSignal(Window.Signal:Connect(LPH_NO_VIRTUALIZE(function(...)
+		Window:SetRender(...);
+	end)))
+	WindowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+	WindowFrame.Visible = false
+	WindowFrame.BackgroundTransparency = 1
+	Window:SetRender(false);
 
 	if NeverLose.EnabledBlur then
 		NeverLose:CreateBlurModule(WindowFrame,Window.Signal);
@@ -4325,6 +4343,7 @@ function NeverLose:CreateWindow(Config)
 
 	UserSettingButton.Name = NeverLose.RandomString();
 	UserSettingButton.Parent = BottomFrame
+	UserSettingButton.Visible = false
 	UserSettingButton.AnchorPoint = Vector2.new(1, 0.5)
 	UserSettingButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	UserSettingButton.BackgroundTransparency = 1.000
@@ -4352,6 +4371,8 @@ function NeverLose:CreateWindow(Config)
 	end)))
 
 	RightMenuFrame.Name = NeverLose.RandomString();
+	RightMenuFrame.Visible = false
+	RightMenuFrame.Size = UDim2.fromOffset(0, 0)
 	RightMenuFrame.Parent = WindowFrame
 	RightMenuFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 13)
 	RightMenuFrame.BackgroundTransparency = 0.600
@@ -4393,6 +4414,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigFrame.Parent = RightHeader
 	ConfigFrame.Visible = false
 	ConfigFrame.Size = UDim2.fromOffset(0, 0)
+	ConfigFrame.BackgroundTransparency = 1
 	ConfigFrame.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigFrame.BackgroundColor3 = Color3.fromRGB(13, 17, 22)
 	ConfigFrame.BackgroundTransparency = 0.750
@@ -4420,7 +4442,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigIcon.Size = UDim2.new(0, 25, 0, 25)
 	ConfigIcon.ZIndex = 9
 	ConfigIcon.FontFace = NeverLose.BuiltInBold
-	ConfigIcon.Text = "pencil-square"
+	ConfigIcon.Text = "floppy-disk"
 	ConfigIcon.TextColor3 = Color3.fromRGB(223, 223, 223)
 	ConfigIcon.TextSize = 16.000
 	ConfigIcon.TextTransparency = 0.250
@@ -5837,8 +5859,18 @@ function NeverLose:CreateWindow(Config)
 		return ConfigLib;
 	end;
 
+	-- Built-in top config UI disabled (use Configs tab in hub)
 	-- Window:_InitConfig();
-	pcall(function() if ConfigFrame then ConfigFrame.Visible=false ConfigFrame.Size=UDim2.fromOffset(0,0) end if RightMenuFrame then RightMenuFrame.Visible=false end end)
+	pcall(function()
+		if ConfigFrame then
+			ConfigFrame.Visible = false
+			ConfigFrame.Size = UDim2.fromOffset(0, 0)
+		end
+		if RightMenuFrame then
+			RightMenuFrame.Visible = false
+			RightMenuFrame.Size = UDim2.fromOffset(0, 0)
+		end
+	end)
 
 	local UserSettings = NeverLose:CreateOptionWindow(BottomFrame , BottomFrame.ZIndex + 13);
 	local reciveSignal;

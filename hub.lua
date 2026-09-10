@@ -4,15 +4,46 @@
 
 local REPO_UI = "https://raw.githubusercontent.com/GhosterXS/Neverlose-Ui-Roblox/main/source.luau"
 
+local function LoadNeverLoseUI()
+    local candidates = {
+        "source.luau",
+        "source.lua",
+        "Neverlose/source.luau",
+        "Neverlose-Ui-Roblox/source.luau",
+        "workspace/source.luau",
+    }
+    -- Prefer LOCAL patched source (copy source.luau next to hub.lua)
+    if type(isfile) == "function" and type(readfile) == "function" then
+        for _, path in ipairs(candidates) do
+            local ok, body = pcall(function()
+                if isfile(path) then return readfile(path) end
+                return nil
+            end)
+            if ok and type(body) == "string" and #body > 100 then
+                local fn, err = loadstring(body)
+                if fn then
+                    local ok2, res = pcall(fn)
+                    if ok2 and res then
+                        print("[Neverlose] Loaded local UI:", path)
+                        return res
+                    end
+                end
+            end
+        end
+    end
+    -- Fallback: GitHub (unpatched)
+    local src = game:HttpGet(REPO_UI)
+    assert(type(src) == "string" and #src > 100, "UI download empty")
+    local fn, err = loadstring(src)
+    assert(fn, tostring(err))
+    local res = fn()
+    warn("[Neverlose] Loaded UI from GitHub (put source.luau next to hub for patches)")
+    return res
+end
+
 local NeverLose
 do
-    local ok, res = pcall(function()
-        local src = game:HttpGet(REPO_UI)
-        assert(type(src) == "string" and #src > 100, "UI download empty")
-        local fn, err = loadstring(src)
-        assert(fn, tostring(err))
-        return fn()
-    end)
+    local ok, res = pcall(LoadNeverLoseUI)
     if not ok or not res then
         warn("[Neverlose] Failed to load UI:", res)
         return
@@ -1401,9 +1432,23 @@ end)
 CaptureMouseState()
 menuOpen = false
 ApplyMenuMouse(false)
+getgenv().NL_ALLOW_UI = false
 pcall(function()
     if Window.Signal then Window.Signal:SetValue(false) end
     if Window.SetRender then Window:SetRender(false) end
+end)
+-- Kill github source forced open (task.delay 0.25 SetRender true)
+task.spawn(function()
+    for _ = 1, 12 do
+        task.wait(0.05)
+        if getgenv().NL_ALLOW_UI then return end
+        pcall(function()
+            if Window.Signal and Window.Signal:GetValue() then
+                Window.Signal:SetValue(false)
+            end
+            if Window.SetRender then Window:SetRender(false) end
+        end)
+    end
 end)
 
 local function storeKey(name)
@@ -1776,25 +1821,31 @@ if Config.LoopFOV then StartLoopFOV() end
 if Config.Freecam then StartFreecam() end
 ApplyWorld()
 RefreshChams()
--- Show UI only after intro animation finishes (and controls are already created)
+-- Show UI only after intro finishes — re-enable current tab so buttons appear
 task.spawn(function()
     local t0 = os.clock()
-    while not getgenv().NL_INTRO_DONE and (os.clock() - t0) < 4 do
+    while not getgenv().NL_INTRO_DONE and (os.clock() - t0) < 5 do
         task.wait(0.05)
     end
-    task.wait(0.1)
+    task.wait(0.15)
+    getgenv().NL_ALLOW_UI = true
     pcall(function()
         if not Window then return end
-        -- Force open via Signal so all controls receive SetRender(true)
+        -- Open window signal (propagates to tabs/controls)
         if Window.Signal then
-            if not Window.Signal:GetValue() then
-                Window.Signal:SetValue(true)
+            Window.Signal:SetValue(true)
+        end
+        if Window.SetRender then
+            Window:SetRender(true)
+        end
+        -- Explicitly refresh active tab so toggles/buttons SetRender(true)
+        if type(Window.Tabs) == "table" then
+            local idx = Window.CurrentTab or 1
+            for i, tab in ipairs(Window.Tabs) do
+                if tab and tab.SetValue then
+                    tab.SetValue(i == idx)
+                end
             end
-            if Window.SetRender then
-                Window:SetRender(true)
-            end
-        elseif Window.ToggleInterface then
-            Window:ToggleInterface()
         end
     end)
     menuOpen = true
