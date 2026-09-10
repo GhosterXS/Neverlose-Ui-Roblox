@@ -3870,7 +3870,7 @@ function NeverLose:CreateWindow(Config)
 		Content = Config.Content,
 		Size = Config.Size,
 		ConfigFolder = Config.ConfigFolder,
-		Signal = NeverLose:CreateSignal(true),
+		Signal = NeverLose:CreateSignal(false),
 		Tabs = {},
 		CurrentTab = 1,
 		Keybind = Config.Keybind,
@@ -4370,7 +4370,8 @@ function NeverLose:CreateWindow(Config)
 	end)))
 
 	RightMenuFrame.Name = NeverLose.RandomString();
-	-- top config chip disabled (use Configs tab instead)
+	RightMenuFrame.Visible = false
+	RightMenuFrame.Size = UDim2.fromOffset(0, 0)
 	RightMenuFrame.Parent = WindowFrame
 	RightMenuFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 13)
 	RightMenuFrame.BackgroundTransparency = 0.600
@@ -4412,6 +4413,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigFrame.Parent = RightHeader
 	ConfigFrame.Visible = false
 	ConfigFrame.Size = UDim2.fromOffset(0, 0)
+	ConfigFrame.BackgroundTransparency = 1
 	ConfigFrame.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigFrame.BackgroundColor3 = Color3.fromRGB(13, 17, 22)
 	ConfigFrame.BackgroundTransparency = 0.750
@@ -5856,7 +5858,18 @@ function NeverLose:CreateWindow(Config)
 		return ConfigLib;
 	end;
 
-	Window:_InitConfig();
+	-- Built-in top config UI disabled (use Configs tab in hub)
+	-- Window:_InitConfig();
+	pcall(function()
+		if ConfigFrame then
+			ConfigFrame.Visible = false
+			ConfigFrame.Size = UDim2.fromOffset(0, 0)
+		end
+		if RightMenuFrame then
+			RightMenuFrame.Visible = false
+			RightMenuFrame.Size = UDim2.fromOffset(0, 0)
+		end
+	end)
 
 	local UserSettings = NeverLose:CreateOptionWindow(BottomFrame , BottomFrame.ZIndex + 13);
 	local reciveSignal;

@@ -104,6 +104,9 @@ local Config = {
     LocalChams_OutlineTransparency = 0,
 
     AmbientEnabled = false,
+    ConfigName = "default",
+    LightColor = {255, 255, 255},
+    LightBrightness = 1,
     AmbientColor = {128, 128, 128},
     OutdoorAmbient = {128, 128, 128},
     ColorShift_Top = {0, 0, 0},
@@ -129,6 +132,7 @@ local Config = {
     FogColor = {192, 192, 192},
 
 
+    ConfigName = "default",
     Skin_UserId = 0,
     Skin_Username = "",
 
@@ -158,30 +162,62 @@ local function FromColor3(c)
     }
 end
 
-local ConfigFolder, ConfigFile = "NeverloseHub", "config.json"
+local ConfigFolder = "NeverloseNL"
 
-local function SaveConfig()
+local function EnsureConfigFolder()
     pcall(function()
-        if not isfolder(ConfigFolder) then makefolder(ConfigFolder) end
-        writefile(ConfigFolder .. "/" .. ConfigFile, HttpService:JSONEncode(Config))
-    end)
-end
-
-local function LoadConfig()
-    pcall(function()
-        local path = ConfigFolder .. "/" .. ConfigFile
-        if isfile(path) then
-            local data = HttpService:JSONDecode(readfile(path))
-            for k, v in pairs(data) do
-                if Config[k] ~= nil then Config[k] = v end
-            end
+        if makefolder and isfolder and not isfolder(ConfigFolder) then
+            makefolder(ConfigFolder)
+        elseif makefolder then
+            pcall(makefolder, ConfigFolder)
         end
     end)
 end
-LoadConfig()
 
+local function ConfigPath(name)
+    name = tostring(name or "default"):gsub("[^%w%-%_ ]", "")
+    if name == "" then name = "default" end
+    return ConfigFolder .. "/" .. name .. ".json"
+end
+
+local function SaveConfig(name)
+    name = name or Config.ConfigName or "default"
+    Config.ConfigName = name
+    EnsureConfigFolder()
+    local ok, err = pcall(function()
+        assert(writefile, "writefile not available")
+        writefile(ConfigPath(name), HttpService:JSONEncode(Config))
+    end)
+    return ok, err
+end
+
+local function LoadConfig(name)
+    name = name or Config.ConfigName or "default"
+    local path = ConfigPath(name)
+    local ok, err = pcall(function()
+        assert(readfile and isfile, "readfile not available")
+        assert(isfile(path), "config not found: " .. path)
+        local data = HttpService:JSONDecode(readfile(path))
+        assert(type(data) == "table", "invalid config")
+        for k, v in pairs(data) do
+            Config[k] = v
+        end
+        Config.ConfigName = name
+    end)
+    return ok, err
+end
+
+local function DeleteConfig(name)
+    name = name or Config.ConfigName or "default"
+    local path = ConfigPath(name)
+    local ok, err = pcall(function()
+        if delfile and isfile and isfile(path) then
+            delfile(path)
+        end
+    end)
+    return ok, err
+end
 local function AutoSave()
-    -- manual config only (Configs tab)
 end
 
 local menuOpen = true -- window starts open
@@ -227,6 +263,20 @@ pcall(function() MouseMap.M5B = Enum.UserInputType.MouseButton5 end)
 
 local function InputMatches(bindKey, input)
     if not bindKey or bindKey == "None" or bindKey == "" then return false end
+    -- normalize names
+    if bindKey == "MouseButton4" or bindKey == "MB4" then bindKey = "M4B" end
+    if bindKey == "MouseButton5" or bindKey == "MB5" then bindKey = "M5B" end
+    if bindKey == "MouseButton1" or bindKey == "MB1" then bindKey = "M1B" end
+    if bindKey == "MouseButton2" or bindKey == "MB2" then bindKey = "M2B" end
+    if bindKey == "MouseButton3" or bindKey == "MB3" then bindKey = "M3B" end
+
+    local uitName = tostring(input.UserInputType and input.UserInputType.Name or "")
+    if bindKey == "M4B" then
+        return uitName == "MouseButton4" or (MouseMap.M4B and input.UserInputType == MouseMap.M4B)
+    end
+    if bindKey == "M5B" then
+        return uitName == "MouseButton5" or (MouseMap.M5B and input.UserInputType == MouseMap.M5B)
+    end
     if MouseMap[bindKey] then
         return input.UserInputType == MouseMap[bindKey]
     end
@@ -235,6 +285,16 @@ end
 
 local function IsBindHeld(bindKey)
     if not bindKey or bindKey == "None" then return false end
+    if bindKey == "MouseButton4" or bindKey == "MB4" then bindKey = "M4B" end
+    if bindKey == "MouseButton5" or bindKey == "MB5" then bindKey = "M5B" end
+    if bindKey == "M4B" or bindKey == "M5B" then
+        local ok, pressed = pcall(function()
+            local enumVal = MouseMap[bindKey]
+            if enumVal then return UserInputService:IsMouseButtonPressed(enumVal) end
+            return false
+        end)
+        return ok and pressed
+    end
     if MouseMap[bindKey] then
         return UserInputService:IsMouseButtonPressed(MouseMap[bindKey])
     end
@@ -314,12 +374,55 @@ end
 
 local function IsTeammate(target)
     if not target or target == player then return false end
+    -- Standard Team / TeamColor
     if player.Team and target.Team and player.Team == target.Team then return true end
-    local attrs = {"team", "Team", "clan", "Clan", "faction", "Faction", "FactionName", "group", "Group", "side", "Side"}
+    local sameColor = false
+    pcall(function()
+        if player.TeamColor and target.TeamColor and player.TeamColor == target.TeamColor then
+            sameColor = true
+        elseif player.TeamColor and target.TeamColor and player.TeamColor.Name == target.TeamColor.Name then
+            sameColor = true
+        end
+    end)
+    if sameColor then return true end
+    -- Attributes on player / character (Rivals + others)
+    local attrs = {
+        "team", "Team", "TeamName", "teamName", "TeamId", "teamId",
+        "clan", "Clan", "faction", "Faction", "FactionName",
+        "group", "Group", "side", "Side", "Party", "party",
+        "Squad", "squad", "Alliance", "Role", "role"
+    }
+    local function attrOf(plr, attr)
+        local v = plr:GetAttribute(attr)
+        if not IsEmpty(v) then return v end
+        local ch = plr.Character
+        if ch then
+            local cv = ch:GetAttribute(attr)
+            if not IsEmpty(cv) then return cv end
+        end
+        return nil
+    end
     for _, attr in ipairs(attrs) do
-        local a, b = player:GetAttribute(attr), target:GetAttribute(attr)
+        local a, b = attrOf(player, attr), attrOf(target, attr)
         if not IsEmpty(a) and not IsEmpty(b) and a == b then return true end
     end
+    -- Values / StringValues under character (common in custom games)
+    local function findTeamValue(plr)
+        local ch = plr.Character
+        if not ch then return nil end
+        for _, name in ipairs({"Team", "team", "TeamName", "Side", "Faction"}) do
+            local v = ch:FindFirstChild(name)
+            if v and v:IsA("ValueBase") then return v.Value end
+            local hum = ch:FindFirstChildOfClass("Humanoid")
+            if hum then
+                local hv = hum:FindFirstChild(name)
+                if hv and hv:IsA("ValueBase") then return hv.Value end
+            end
+        end
+        return nil
+    end
+    local ta, tb = findTeamValue(player), findTeamValue(target)
+    if not IsEmpty(ta) and not IsEmpty(tb) and ta == tb then return true end
     return false
 end
 
@@ -396,8 +499,10 @@ pcall(function()
 end)
 
 
-pcall(function()
-    NeverLose:CreateNotification().new({ Title = "Neverlose", Content = "Universal Hub loaded", Duration = 3 })
+task.delay(2.0, function()
+    pcall(function()
+        NeverLose:CreateNotification().new({ Title = "Neverlose", Content = "Universal Hub loaded", Duration = 3 })
+    end)
 end)
 
 local FeatureState = {
@@ -1016,6 +1121,9 @@ local function ApplyWorld()
         Lighting.OutdoorAmbient = ToColor3(Config.OutdoorAmbient)
         Lighting.ColorShift_Top = ToColor3(Config.ColorShift_Top)
         Lighting.ColorShift_Bottom = ToColor3(Config.ColorShift_Bottom)
+        pcall(function()
+            Lighting.Brightness = Config.LightBrightness or 1
+        end)
     else
         Lighting.Ambient = savedLighting.Ambient
         Lighting.OutdoorAmbient = savedLighting.OutdoorAmbient
@@ -1284,13 +1392,23 @@ pcall(function()
     end
 end)
 CaptureMouseState()
-menuOpen = true
-ApplyMenuMouse(true)
+menuOpen = false
+ApplyMenuMouse(false)
+pcall(function()
+    if Window.Signal then Window.Signal:SetValue(false) end
+end)
 
 local function storeKey(name)
     return function(v)
-        if v == "Escape" or v == "Esc" or v == Enum.KeyCode.Escape then
+        if typeof(v) == "EnumItem" then v = v.Name end
+        if v == "Escape" or v == "Esc" then
             Config.Keys[name].Key = "None"
+        elseif v == "MouseButton4" or v == "MB4" then
+            Config.Keys[name].Key = "M4B"
+            LastKeyFeature = name
+        elseif v == "MouseButton5" or v == "MB5" then
+            Config.Keys[name].Key = "M5B"
+            LastKeyFeature = name
         elseif type(v) == "string" and v ~= "" and v ~= "None" then
             Config.Keys[name].Key = v
             LastKeyFeature = name
@@ -1318,10 +1436,10 @@ end
 
 Window:AddTabLabel("MAIN")
 local LegitTab = Window:AddTab({ Icon = "crosshairs", Name = "Legit" })
-local AATab = Window:AddTab({ Icon = "two-arrows-spin-clockwise", Name = "AA" })
+local AATab = Window:AddTab({ Icon = "eye", Name = "Anti-Aim" })
 local MoveTab = Window:AddTab({ Icon = "person", Name = "Movement" })
-local Visuals = Window:AddTab({ Icon = "eye", Name = "Visuals" })
-local WorldTab = Window:AddTab({ Icon = "globe", Name = "World" })
+local Visuals = Window:AddTab({ Icon = "cube", Name = "Visuals" })
+local WorldTab = Window:AddTab({ Icon = "sun", Name = "World" })
 local MiscTab = Window:AddTab({ Icon = "cube", Name = "Misc" })
 local ConfigTab = Window:AddTab({ Icon = "gear", Name = "Configs" })
 
@@ -1502,6 +1620,20 @@ CamSec:AddLabel("Freecam Speed"):AddSlider({
 local ambLabel = EnvSec:AddLabel("Custom Ambient")
 bindFeature(ambLabel, "Ambient", Config.AmbientEnabled, "AmbientEnabled")
 pcall(function()
+EnvSec:AddLabel("Light Color"):AddColorPicker({
+    Default = ToColor3(Config.LightColor or {255,255,255}), Flag = "LightColor",
+    Callback = function(c)
+        Config.LightColor = FromColor3(c)
+        pcall(function() Lighting.ColorShift_Top = c end)
+        ApplyWorld()
+    end
+})
+end)
+EnvSec:AddLabel("Light Brightness"):AddSlider({
+    Min = 0, Max = 10, Default = Config.LightBrightness or 1, Rounding = 2, Flag = "LightBrightness",
+    Callback = function(v) Config.LightBrightness = v pcall(function() Lighting.Brightness = v end) end
+})
+pcall(function()
     EnvSec:AddLabel("Ambient"):AddColorPicker({ Default = ToColor3(Config.AmbientColor), Flag = "AmbientColor", Callback = function(c) Config.AmbientColor = FromColor3(c) ApplyWorld() AutoSave() end })
     EnvSec:AddLabel("Outdoor"):AddColorPicker({ Default = ToColor3(Config.OutdoorAmbient), Flag = "OutdoorAmbient", Callback = function(c) Config.OutdoorAmbient = FromColor3(c) ApplyWorld() AutoSave() end })
     EnvSec:AddLabel("Shift Top"):AddColorPicker({ Default = ToColor3(Config.ColorShift_Top), Flag = "ColorShift_Top", Callback = function(c) Config.ColorShift_Top = FromColor3(c) ApplyWorld() AutoSave() end })
@@ -1560,76 +1692,61 @@ end
 Config.ConfigName = Config.ConfigName or "default"
 
 CfgSec:AddLabel("Config Name"):AddTextBox({
-    Default = Config.ConfigName,
-    Flag = "ConfigName",
+    Default = Config.ConfigName or "default",
+    Flag = "ConfigNameBox",
     Callback = function(v) Config.ConfigName = tostring(v or "default") end
 })
 CfgSec:AddButton({
     Name = "Save Config",
     Callback = function()
-        local name = Config.ConfigName or "default"
+        local ok, err = SaveConfig(Config.ConfigName)
         pcall(function()
-            if makefolder then makefolder("NeverloseNL") end
-            local path = "NeverloseNL/" .. name .. ".json"
-            -- temporarily point SaveConfig path
-            local oldSave = SaveConfig
-            -- write using HttpService encode of Config
-            if writefile then
-                writefile(path, HttpService:JSONEncode(Config))
-            else
-                oldSave()
-            end
-        end)
-        pcall(function()
-            NeverLose:CreateNotification().new({ Title = "Configs", Content = "Saved " .. tostring(Config.ConfigName), Duration = 2 })
+            NeverLose:CreateNotification().new({
+                Title = "Configs",
+                Content = ok and ("Saved: " .. tostring(Config.ConfigName)) or ("Save failed: " .. tostring(err)),
+                Duration = 3
+            })
         end)
     end
 })
 CfgSec:AddButton({
     Name = "Load Config",
     Callback = function()
-        local name = Config.ConfigName or "default"
+        local ok, err = LoadConfig(Config.ConfigName)
+        if ok then
+            pcall(function()
+                if Config.AA_Enabled then StartAA() else StopAA() end
+                if Config.Aimbot_Enabled then StartAimbot() else StopAimbot() end
+                if Config.AutoJump then StartAutoJump() else StopAutoJump() end
+                if Config.ThirdPerson then StartThirdPerson() else StopThirdPerson() end
+                if Config.Freecam then StartFreecam() else StopFreecam() end
+                if Config.LoopFOV then StartLoopFOV() else StopLoopFOV() end
+                ApplyWorld()
+                RefreshChams()
+            end)
+        end
         pcall(function()
-            local path = "NeverloseNL/" .. name .. ".json"
-            if readfile and isfile and isfile(path) then
-                local data = HttpService:JSONDecode(readfile(path))
-                if type(data) == "table" then
-                    for k, v in pairs(data) do Config[k] = v end
-                end
-            else
-                LoadConfig()
-            end
-        end)
-        -- re-apply runtime features after load
-        pcall(function()
-            if Config.AA_Enabled then StartAA() else StopAA() end
-            if Config.Aimbot_Enabled then StartAimbot() else StopAimbot() end
-            if Config.AutoJump then StartAutoJump() else StopAutoJump() end
-            if Config.ThirdPerson then StartThirdPerson() else StopThirdPerson() end
-            if Config.Freecam then StartFreecam() else StopFreecam() end
-            if Config.LoopFOV then StartLoopFOV() else StopLoopFOV() end
-            ApplyWorld()
-            RefreshChams()
-        end)
-        pcall(function()
-            NeverLose:CreateNotification().new({ Title = "Configs", Content = "Loaded " .. tostring(Config.ConfigName), Duration = 2 })
+            NeverLose:CreateNotification().new({
+                Title = "Configs",
+                Content = ok and ("Loaded: " .. tostring(Config.ConfigName)) or ("Load failed: " .. tostring(err)),
+                Duration = 3
+            })
         end)
     end
 })
 CfgSec:AddButton({
     Name = "Delete Config",
     Callback = function()
-        local name = Config.ConfigName or "default"
+        local ok, err = DeleteConfig(Config.ConfigName)
         pcall(function()
-            local path = "NeverloseNL/" .. name .. ".json"
-            if delfile and isfile and isfile(path) then delfile(path) end
-        end)
-        pcall(function()
-            NeverLose:CreateNotification().new({ Title = "Configs", Content = "Deleted " .. tostring(name), Duration = 2 })
+            NeverLose:CreateNotification().new({
+                Title = "Configs",
+                Content = ok and ("Deleted: " .. tostring(Config.ConfigName)) or ("Delete failed: " .. tostring(err)),
+                Duration = 3
+            })
         end)
     end
 })
-
 
 FeatureState.AA = Config.AA_Enabled
 FeatureState.Aimbot = Config.Aimbot_Enabled
@@ -1651,4 +1768,14 @@ if Config.LoopFOV then StartLoopFOV() end
 if Config.Freecam then StartFreecam() end
 ApplyWorld()
 RefreshChams()
-UnlockMouse()
+-- Show UI only after intro animation finishes
+task.spawn(function()
+    task.wait(1.85)
+    pcall(function()
+        if Window and Window.Signal and not Window.Signal:GetValue() then
+            Window:ToggleInterface()
+        end
+    end)
+    menuOpen = true
+    ApplyMenuMouse(true)
+end)
