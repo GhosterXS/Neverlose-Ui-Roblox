@@ -186,6 +186,9 @@ GlobalWindow.Name = NeverLose.RandomString();
 GlobalWindow.IgnoreGuiInset = true;
 GlobalWindow.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 GlobalWindow.ResetOnSpawn = false;
+pcall(function()
+	GlobalWindow:SetAttribute("NL_HUB", true);
+end);
 GlobalWindow.Parent = CoreGui;
 
 NeverLose.Scales = {

@@ -49,6 +49,10 @@ do
         return
     end
     NeverLose = res
+    pcall(function()
+        NeverLose.UnloadEnabled = true
+        getgenv().NeverLose = NeverLose
+    end)
 end
 
 local Players = game:GetService("Players")
@@ -64,6 +68,75 @@ local StarterGui = game:GetService("StarterGui")
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local moveMouse = mousemoverel or (Input and Input.MouseMove) or nil
+
+
+-- Disable previous Neverlose / hub instance completely
+local function KillOldNeverlose()
+    pcall(function()
+        if getgenv().NL_HUB_CONNECTIONS then
+            for _, c in ipairs(getgenv().NL_HUB_CONNECTIONS) do
+                pcall(function()
+                    if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
+                    if type(c) == "thread" then task.cancel(c) end
+                end)
+            end
+        end
+        getgenv().NL_HUB_CONNECTIONS = {}
+
+        local old = rawget(getgenv(), "NeverLose") or rawget(getgenv(), "Neverlose") or rawget(getgenv(), "NL_UI")
+        if type(old) == "table" then
+            pcall(function()
+                if type(old.GlobalSignals) == "table" then
+                    for _, sig in ipairs(old.GlobalSignals) do
+                        pcall(function()
+                            if typeof(sig) == "RBXScriptConnection" then sig:Disconnect() end
+                        end)
+                    end
+                end
+            end)
+            pcall(function()
+                if old.ScreenGui then old.ScreenGui:Destroy() end
+            end)
+            pcall(function()
+                if type(old.Unload) == "function" then old:Unload() end
+            end)
+            getgenv().NeverLose = nil
+            getgenv().Neverlose = nil
+            getgenv().NL_UI = nil
+        end
+
+        local parents = {}
+        pcall(function() table.insert(parents, game:GetService("CoreGui")) end)
+        pcall(function() table.insert(parents, player:FindFirstChild("PlayerGui") or player:WaitForChild("PlayerGui", 1)) end)
+        pcall(function() if gethui then table.insert(parents, gethui()) end end)
+        pcall(function() if get_hidden_gui then table.insert(parents, get_hidden_gui()) end end)
+
+        for _, parent in ipairs(parents) do
+            if parent then
+                for _, gui in ipairs(parent:GetChildren()) do
+                    pcall(function()
+                        if gui:IsA("ScreenGui") then
+                            local n = string.lower(tostring(gui.Name))
+                            if gui:GetAttribute("NL_HUB") == true
+                                or gui:GetAttribute("Neverlose") == true
+                                or string.find(n, "nl_intro", 1, true)
+                                or string.find(n, "neverlose", 1, true)
+                                or string.find(n, "nl_esp", 1, true) then
+                                gui:Destroy()
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+
+        -- Remove previous Drawing objects created by this hub
+        pcall(function()
+            if getgenv().NL_ESP_CLEAR then getgenv().NL_ESP_CLEAR() end
+        end)
+    end)
+end
+KillOldNeverlose()
 
 local Config = {
     AA_Enabled = false,
@@ -489,52 +562,135 @@ pcall(function()
     introGui.IgnoreGuiInset = true
     introGui.DisplayOrder = 100000
     introGui.ResetOnSpawn = false
+    introGui:SetAttribute("NL_HUB", true)
     introGui.Parent = guiParent
+
+    -- Full-screen dark semi-transparent background
+    local bg = Instance.new("Frame")
+    bg.Name = "Dim"
+    bg.Size = UDim2.fromScale(1, 1)
+    bg.Position = UDim2.fromScale(0, 0)
+    bg.BorderSizePixel = 0
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BackgroundTransparency = 1
+    bg.ZIndex = 1
+    bg.Parent = introGui
 
     local label = Instance.new("TextLabel")
     label.AnchorPoint = Vector2.new(0.5, 0.5)
     label.Position = UDim2.fromScale(0.5, 0.5)
-    label.Size = UDim2.fromOffset(400, 48)
+    label.Size = UDim2.fromOffset(420, 52)
     label.BackgroundTransparency = 1
     label.Text = "Neverlose"
     label.Font = Enum.Font.GothamBold
-    label.TextSize = 32
+    label.TextSize = 34
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextTransparency = 1
-    label.ZIndex = 10
+    label.ZIndex = 20
     label.Parent = introGui
 
-    local left = Instance.new("Frame")
-    left.AnchorPoint = Vector2.new(1, 0.5)
-    left.Position = UDim2.new(0.5, -110, 0.5, 0)
-    left.Size = UDim2.fromOffset(0, 2)
-    left.BorderSizePixel = 0
-    left.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    left.ZIndex = 10
-    left.Parent = introGui
+    -- Soft text glow layers
+    for i, tr in ipairs({0.75, 0.85}) do
+        local glow = label:Clone()
+        glow.TextTransparency = 1
+        glow.ZIndex = 19 - i
+        glow.TextColor3 = Color3.fromRGB(200, 220, 255)
+        glow.Parent = introGui
+        glow:SetAttribute("Glow", true)
+    end
 
-    local right = Instance.new("Frame")
-    right.AnchorPoint = Vector2.new(0, 0.5)
-    right.Position = UDim2.new(0.5, 110, 0.5, 0)
-    right.Size = UDim2.fromOffset(0, 2)
-    right.BorderSizePixel = 0
-    right.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    right.ZIndex = 10
-    right.Parent = introGui
+    local function makeBloomLine(side)
+        -- side: -1 left, 1 right
+        local root = Instance.new("Frame")
+        root.AnchorPoint = Vector2.new(side < 0 and 1 or 0, 0.5)
+        root.Position = UDim2.new(0.5, side * 115, 0.5, 0)
+        root.Size = UDim2.fromOffset(0, 2)
+        root.BorderSizePixel = 0
+        root.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        root.BackgroundTransparency = 1
+        root.ZIndex = 15
+        root.Parent = introGui
 
-    TweenService:Create(label, TweenInfo.new(0.45, Enum.EasingStyle.Quad), { TextTransparency = 0 }):Play()
-    TweenService:Create(left, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Size = UDim2.fromOffset(140, 2) }):Play()
-    TweenService:Create(right, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Size = UDim2.fromOffset(140, 2) }):Play()
-    task.delay(1.5, function()
+        -- Bloom layers (larger, more transparent)
+        local blooms = {}
+        for i, data in ipairs({
+            {h = 10, tr = 0.82, z = 12},
+            {h = 6,  tr = 0.70, z = 13},
+            {h = 4,  tr = 0.55, z = 14},
+        }) do
+            local b = Instance.new("Frame")
+            b.AnchorPoint = Vector2.new(side < 0 and 1 or 0, 0.5)
+            b.Position = UDim2.new(0.5, side * 115, 0.5, 0)
+            b.Size = UDim2.fromOffset(0, data.h)
+            b.BorderSizePixel = 0
+            b.BackgroundColor3 = Color3.fromRGB(180, 210, 255)
+            b.BackgroundTransparency = 1
+            b.ZIndex = data.z
+            b.Parent = introGui
+            local c = Instance.new("UICorner")
+            c.CornerRadius = UDim.new(1, 0)
+            c.Parent = b
+            table.insert(blooms, {frame = b, targetTr = data.tr, h = data.h})
+        end
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = root
+        return root, blooms
+    end
+
+    local left, leftBloom = makeBloomLine(-1)
+    local right, rightBloom = makeBloomLine(1)
+
+    -- Fade in dark background
+    TweenService:Create(bg, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { BackgroundTransparency = 0.35 }):Play()
+    TweenService:Create(label, TweenInfo.new(0.5, Enum.EasingStyle.Quad), { TextTransparency = 0 }):Play()
+    for _, child in ipairs(introGui:GetChildren()) do
+        if child:IsA("TextLabel") and child:GetAttribute("Glow") then
+            TweenService:Create(child, TweenInfo.new(0.5), { TextTransparency = 0.8 }):Play()
+        end
+    end
+
+    -- Expand lines + bloom
+    TweenService:Create(left, TweenInfo.new(0.65, Enum.EasingStyle.Quad), {
+        Size = UDim2.fromOffset(150, 2), BackgroundTransparency = 0.05
+    }):Play()
+    TweenService:Create(right, TweenInfo.new(0.65, Enum.EasingStyle.Quad), {
+        Size = UDim2.fromOffset(150, 2), BackgroundTransparency = 0.05
+    }):Play()
+    for _, pack in ipairs({leftBloom, rightBloom}) do
+        for _, b in ipairs(pack) do
+            TweenService:Create(b.frame, TweenInfo.new(0.65, Enum.EasingStyle.Quad), {
+                Size = UDim2.fromOffset(160, b.h),
+                BackgroundTransparency = b.targetTr
+            }):Play()
+        end
+    end
+
+    task.delay(1.55, function()
+        TweenService:Create(bg, TweenInfo.new(0.45), { BackgroundTransparency = 1 }):Play()
         TweenService:Create(label, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
+        for _, child in ipairs(introGui:GetChildren()) do
+            if child:IsA("TextLabel") then
+                TweenService:Create(child, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
+            end
+        end
         TweenService:Create(left, TweenInfo.new(0.4), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
         TweenService:Create(right, TweenInfo.new(0.4), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
-        task.delay(0.45, function()
+        for _, pack in ipairs({leftBloom, rightBloom}) do
+            for _, b in ipairs(pack) do
+                TweenService:Create(b.frame, TweenInfo.new(0.4), {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.fromOffset(0, b.h)
+                }):Play()
+            end
+        end
+        task.delay(0.5, function()
             pcall(function() introGui:Destroy() end)
             getgenv().NL_INTRO_DONE = true
         end)
     end)
 end)
+
 
 
 task.delay(2.0, function()
@@ -1404,6 +1560,12 @@ do
         return
     end
     Window = win
+    pcall(function()
+        if NeverLose.ScreenGui then
+            NeverLose.ScreenGui:SetAttribute("NL_HUB", true)
+            NeverLose.ScreenGui.Enabled = false -- keep fully off until intro ends
+        end
+    end)
 end
 
 pcall(function()
@@ -1436,6 +1598,7 @@ getgenv().NL_ALLOW_UI = false
 pcall(function()
     if Window.Signal then Window.Signal:SetValue(false) end
     if Window.SetRender then Window:SetRender(false) end
+    if NeverLose.ScreenGui then NeverLose.ScreenGui.Enabled = false end
 end)
 -- Kill github source forced open (task.delay 0.25 SetRender true)
 task.spawn(function()
@@ -1831,6 +1994,9 @@ task.spawn(function()
     getgenv().NL_ALLOW_UI = true
     pcall(function()
         if not Window then return end
+        if NeverLose.ScreenGui then
+            NeverLose.ScreenGui.Enabled = true
+        end
         -- Open window signal (propagates to tabs/controls)
         if Window.Signal then
             Window.Signal:SetValue(true)
