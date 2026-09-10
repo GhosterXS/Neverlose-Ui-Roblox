@@ -3954,11 +3954,21 @@ function NeverLose:CreateWindow(Config)
 
 	Window.SetRender = LPH_NO_VIRTUALIZE(function(self , value)
 		if value then
+			-- Force visible immediately (tween alone left UI "present but invisible")
+			WindowFrame.Visible = true
+			WindowFrame.Parent = NeverLose.ScreenGui
+			WindowFrame.Position = UDim2.fromScale(0.5, 0.5)
+			WindowFrame.Size = Window.Size
+			WindowFrame.BackgroundTransparency = 0.03
 			NeverLose.PlayAnimate(WindowFrame , SlowyTween , {
-				BackgroundTransparency = (NeverLose.EnabledBlur and 0.055) or 0.0255,
+				BackgroundTransparency = 0.03,
 				Size = Window.Size
 			})
 
+			LogoImage.ImageTransparency = 0
+			LogoImage.ImageTransparency = 0
+			WindowName.TextTransparency = 0
+			WindowContent.TextTransparency = 0.65
 			NeverLose.PlayAnimate(LogoImage , SlowyTween , {
 				ImageTransparency = 0
 			})

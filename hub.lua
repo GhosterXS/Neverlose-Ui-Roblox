@@ -1555,6 +1555,10 @@ getgenv().NL_ALLOW_UI = false
 do
     local rawSetRender = Window.SetRender
     function Window:SetRender(value)
+        -- support both : and . call styles
+        if value == Window or typeof(value) == "table" then
+            -- mis-bound, ignore
+        end
         if value == true and not getgenv().NL_ALLOW_UI then
             value = false
         end
@@ -1562,7 +1566,6 @@ do
             return rawSetRender(self, value)
         end
     end
-    -- Force closed now
     pcall(function()
         if Window.Signal then Window.Signal:SetValue(false) end
         rawSetRender(Window, false)
@@ -1969,23 +1972,54 @@ task.spawn(function()
     while not getgenv().NL_INTRO_DONE and (os.clock() - t0) < 4 do
         task.wait(0.05)
     end
-    task.wait(0.15)
+    task.wait(0.1)
 
     getgenv().NL_ALLOW_UI = true
 
     pcall(function()
-        -- destroy residual blur FX
         for _, fx in ipairs(game:GetService("Lighting"):GetChildren()) do
-            if fx:IsA("DepthOfFieldEffect") then
-                pcall(function() fx:Destroy() end)
-            end
+            if fx:IsA("DepthOfFieldEffect") then pcall(function() fx:Destroy() end) end
         end
     end)
 
-    pcall(function()
+    local function forceShow()
         if not Window then return end
-        if Window.Signal then Window.Signal:SetValue(true) end
-        if Window.SetRender then Window:SetRender(true) end
+
+        if Window.Signal then
+            Window.Signal:SetValue(true)
+        end
+        if Window.SetRender then
+            Window:SetRender(true)
+        end
+
+        local sg = NeverLose and NeverLose.ScreenGui
+        if sg then
+            sg.Enabled = true
+            pcall(function()
+                if not sg.Parent then
+                    sg.Parent = (gethui and gethui()) or game:GetService("CoreGui")
+                end
+            end)
+            for _, child in ipairs(sg:GetDescendants()) do
+                -- restore main window frame(s)
+            end
+            for _, child in ipairs(sg:GetChildren()) do
+                if child:IsA("Frame") then
+                    local sz = child.AbsoluteSize
+                    -- main window is large
+                    if sz.X >= 300 or (child.Size.X.Offset and child.Size.X.Offset >= 300) then
+                        child.Visible = true
+                        child.Parent = sg
+                        child.AnchorPoint = Vector2.new(0.5, 0.5)
+                        child.Position = UDim2.fromScale(0.5, 0.5)
+                        if child.BackgroundTransparency > 0.5 then
+                            child.BackgroundTransparency = 0.03
+                        end
+                    end
+                end
+            end
+        end
+
         if type(Window.Tabs) == "table" then
             local idx = Window.CurrentTab or 1
             for i, tab in ipairs(Window.Tabs) do
@@ -1994,8 +2028,18 @@ task.spawn(function()
                 end
             end
         end
-    end)
 
-    menuOpen = true
-    ApplyMenuMouse(true)
+        menuOpen = true
+        ApplyMenuMouse(true)
+    end
+
+    local ok, err = pcall(forceShow)
+    if not ok then
+        warn("[Neverlose] forceShow failed:", err)
+    end
+
+    -- second pass after a short delay (library tweens)
+    task.delay(0.3, function()
+        pcall(forceShow)
+    end)
 end)
