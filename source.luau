@@ -4406,6 +4406,7 @@ function NeverLose:CreateWindow(Config)
 	ConfigFrame.Parent = RightHeader
 	ConfigFrame.Visible = false
 	ConfigFrame.Size = UDim2.fromOffset(0, 0)
+	ConfigFrame.BackgroundTransparency = 1
 	ConfigFrame.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigFrame.BackgroundColor3 = Color3.fromRGB(13, 17, 22)
 	ConfigFrame.BackgroundTransparency = 0.750
@@ -4424,6 +4425,7 @@ function NeverLose:CreateWindow(Config)
 
 	ConfigIcon.Name = NeverLose.RandomString();
 	ConfigIcon.Parent = ConfigFrame
+	ConfigIcon.Visible = false
 	ConfigIcon.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	ConfigIcon.BackgroundTransparency = 1.000
@@ -4450,6 +4452,7 @@ function NeverLose:CreateWindow(Config)
 
 	ConfigName.Name = NeverLose.RandomString();
 	ConfigName.Parent = ConfigFrame
+	ConfigName.Visible = false
 	ConfigName.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	ConfigName.BackgroundTransparency = 1.000
@@ -4467,6 +4470,7 @@ function NeverLose:CreateWindow(Config)
 
 	ConfigBthIcon.Name = NeverLose.RandomString();
 	ConfigBthIcon.Parent = ConfigFrame
+	ConfigBthIcon.Visible = false
 	ConfigBthIcon.AnchorPoint = Vector2.new(1, 0.5)
 	ConfigBthIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	ConfigBthIcon.BackgroundTransparency = 1.000
@@ -5850,7 +5854,7 @@ function NeverLose:CreateWindow(Config)
 		return ConfigLib;
 	end;
 
-	Window:_InitConfig();
+	-- Window:_InitConfig(); -- top config menu removed
 
 	local UserSettings = NeverLose:CreateOptionWindow(BottomFrame , BottomFrame.ZIndex + 13);
 	local reciveSignal;

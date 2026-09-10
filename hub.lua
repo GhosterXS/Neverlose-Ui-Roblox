@@ -78,6 +78,13 @@ local moveMouse = mousemoverel or (Input and Input.MouseMove) or nil
 -- Disable previous Neverlose / hub instance completely
 local function KillOldNeverlose()
     pcall(function()
+        -- 1) Stop all active hub features from previous run
+        local shutdown = rawget(getgenv(), "NL_HUB_SHUTDOWN")
+        if type(shutdown) == "function" then
+            pcall(shutdown)
+        end
+        getgenv().NL_HUB_SHUTDOWN = nil
+
         if getgenv().NL_HUB_CONNECTIONS then
             for _, c in ipairs(getgenv().NL_HUB_CONNECTIONS) do
                 pcall(function()
@@ -88,6 +95,7 @@ local function KillOldNeverlose()
         end
         getgenv().NL_HUB_CONNECTIONS = {}
 
+        -- 2) Tear down previous UI library instance
         local old = rawget(getgenv(), "NeverLose") or rawget(getgenv(), "Neverlose") or rawget(getgenv(), "NL_UI")
         if type(old) == "table" then
             pcall(function()
@@ -97,10 +105,13 @@ local function KillOldNeverlose()
                             if typeof(sig) == "RBXScriptConnection" then sig:Disconnect() end
                         end)
                     end
+                    table.clear(old.GlobalSignals)
                 end
             end)
             pcall(function()
-                if old.ScreenGui then old.ScreenGui:Destroy() end
+                if old.ScreenGui then
+                    old.ScreenGui:Destroy()
+                end
             end)
             pcall(function()
                 if type(old.Unload) == "function" then old:Unload() end
@@ -110,9 +121,13 @@ local function KillOldNeverlose()
             getgenv().NL_UI = nil
         end
 
+        -- 3) Destroy leftover ScreenGuis from previous hub
         local parents = {}
         pcall(function() table.insert(parents, game:GetService("CoreGui")) end)
-        pcall(function() table.insert(parents, player:FindFirstChild("PlayerGui") or player:WaitForChild("PlayerGui", 1)) end)
+        pcall(function()
+            local pg = player:FindFirstChild("PlayerGui")
+            if pg then table.insert(parents, pg) end
+        end)
         pcall(function() if gethui then table.insert(parents, gethui()) end end)
         pcall(function() if get_hidden_gui then table.insert(parents, get_hidden_gui()) end end)
 
@@ -126,7 +141,8 @@ local function KillOldNeverlose()
                                 or gui:GetAttribute("Neverlose") == true
                                 or string.find(n, "nl_intro", 1, true)
                                 or string.find(n, "neverlose", 1, true)
-                                or string.find(n, "nl_esp", 1, true) then
+                                or string.find(n, "nl_esp", 1, true)
+                                or string.find(n, "nl_", 1, true) then
                                 gui:Destroy()
                             end
                         end
@@ -135,10 +151,15 @@ local function KillOldNeverlose()
             end
         end
 
-        -- Remove previous Drawing objects created by this hub
+        -- 4) Clear previous Drawing / ESP
         pcall(function()
             if getgenv().NL_ESP_CLEAR then getgenv().NL_ESP_CLEAR() end
         end)
+
+        -- 5) Clear previous window ref
+        getgenv().NL_WINDOW = nil
+        getgenv().NL_ALLOW_UI = false
+        getgenv().NL_INTRO_DONE = false
     end)
 end
 KillOldNeverlose()
@@ -935,6 +956,13 @@ local function ClearESP()
     drawings = {}
 end
 
+getgenv().NL_ESP_CLEAR = function()
+    pcall(ClearESP)
+    pcall(function()
+        if ESPFolder then ESPFolder:Destroy() end
+    end)
+end
+
 local function EnsureHL(store, key, adornee, fill, outline, ft, ot)
     if not adornee or not adornee.Parent then return end
     local h = store[key]
@@ -1636,7 +1664,6 @@ local MoveTab = Window:AddTab({ Icon = "person", Name = "Movement" })
 local Visuals = Window:AddTab({ Icon = "cube", Name = "Visuals" })
 local WorldTab = Window:AddTab({ Icon = "sun", Name = "World" })
 local MiscTab = Window:AddTab({ Icon = "cube", Name = "Misc" })
-local ConfigTab = Window:AddTab({ Icon = "gear", Name = "Configs" })
 
 local AimSec = LegitTab:AddSection({ Name = "AIMBOT", Position = "left" })
 local AASec = AATab:AddSection({ Name = "ANTI-AIM", Position = "left" })
@@ -1647,7 +1674,6 @@ local MoveSec = MoveTab:AddSection({ Name = "MOVEMENT", Position = "left" })
 local CamSec = MiscTab:AddSection({ Name = "CAMERA", Position = "left" })
 local EnvSec = WorldTab:AddSection({ Name = "LIGHTING", Position = "left" })
 local FxSec = WorldTab:AddSection({ Name = "EFFECTS", Position = "right" })
-local CfgSec = ConfigTab:AddSection({ Name = "CONFIGS", Position = "left" })
 
 
 local aimLabel = AimSec:AddLabel("Enabled")
@@ -1884,68 +1910,6 @@ local function ListConfigFiles()
     return names
 end
 
-pcall(function() -- configs tab (isolated so errors never block UI open)
-Config.ConfigName = Config.ConfigName or "default"
-
-CfgSec:AddLabel("Config Name"):AddTextBox({
-    Default = Config.ConfigName or "default",
-    Flag = "ConfigNameBox",
-    Callback = function(v) Config.ConfigName = tostring(v or "default") end
-})
-CfgSec:AddButton({
-    Name = "Save Config",
-    Callback = function()
-        local ok, err = SaveConfig(Config.ConfigName)
-        pcall(function()
-            NeverLose:CreateNotification().new({
-                Title = "Configs",
-                Content = ok and ("Saved: " .. tostring(Config.ConfigName)) or ("Save failed: " .. tostring(err)),
-                Duration = 3
-            })
-        end)
-    end
-})
-CfgSec:AddButton({
-    Name = "Load Config",
-    Callback = function()
-        local ok, err = LoadConfig(Config.ConfigName)
-        if ok then
-            pcall(function()
-                if Config.AA_Enabled then StartAA() else StopAA() end
-                if Config.Aimbot_Enabled then StartAimbot() else StopAimbot() end
-                if Config.AutoJump then StartAutoJump() else StopAutoJump() end
-                if Config.ThirdPerson then StartThirdPerson() else StopThirdPerson() end
-                if Config.Freecam then StartFreecam() else StopFreecam() end
-                if Config.LoopFOV then StartLoopFOV() else StopLoopFOV() end
-                ApplyWorld()
-                RefreshChams()
-            end)
-        end
-        pcall(function()
-            NeverLose:CreateNotification().new({
-                Title = "Configs",
-                Content = ok and ("Loaded: " .. tostring(Config.ConfigName)) or ("Load failed: " .. tostring(err)),
-                Duration = 3
-            })
-        end)
-    end
-})
-CfgSec:AddButton({
-    Name = "Delete Config",
-    Callback = function()
-        local ok, err = DeleteConfig(Config.ConfigName)
-        pcall(function()
-            NeverLose:CreateNotification().new({
-                Title = "Configs",
-                Content = ok and ("Deleted: " .. tostring(Config.ConfigName)) or ("Delete failed: " .. tostring(err)),
-                Duration = 3
-            })
-        end)
-    end
-})
-
-end)
-
 FeatureState.AA = Config.AA_Enabled
 FeatureState.Aimbot = Config.Aimbot_Enabled
 FeatureState.ESP = Config.ESP_Enabled
@@ -1966,6 +1930,46 @@ if Config.LoopFOV then StartLoopFOV() end
 if Config.Freecam then StartFreecam() end
 ApplyWorld()
 RefreshChams()
+
+-- Register shutdown so a second execute kills features + UI
+getgenv().NL_HUB_SHUTDOWN = function()
+    pcall(function() if StopAA then StopAA() end end)
+    pcall(function() if StopAimbot then StopAimbot() end end)
+    pcall(function() if StopAutoJump then StopAutoJump() end end)
+    pcall(function() if StopWalkSpeedLoop then StopWalkSpeedLoop() end end)
+    pcall(function() if StopJumpPowerLoop then StopJumpPowerLoop() end end)
+    pcall(function() if StopThirdPerson then StopThirdPerson() end end)
+    pcall(function() if StopLoopFOV then StopLoopFOV() end end)
+    pcall(function() if StopFreecam then StopFreecam() end end)
+    pcall(function() if ClearESP then ClearESP() end end)
+    pcall(function()
+        if Config then
+            Config.AA_Enabled = false
+            Config.Aimbot_Enabled = false
+            Config.ESP_Enabled = false
+            Config.AutoJump = false
+            Config.ThirdPerson = false
+            Config.LoopFOV = false
+            Config.Freecam = false
+            Config.LocalChams = false
+            Config.AmbientEnabled = false
+        end
+    end)
+    pcall(function()
+        if Window and Window.Signal then Window.Signal:SetValue(false) end
+        if Window and Window.SetRender then Window:SetRender(false) end
+    end)
+    pcall(function()
+        if NeverLose and NeverLose.ScreenGui then
+            NeverLose.ScreenGui:Destroy()
+        end
+    end)
+    pcall(function()
+        if getgenv().NL_ESP_CLEAR then getgenv().NL_ESP_CLEAR() end
+    end)
+end
+getgenv().NL_WINDOW = Window
+
 -- Open menu ONLY after intro is done
 task.spawn(function()
     local t0 = os.clock()
