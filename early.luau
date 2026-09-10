@@ -4130,10 +4130,11 @@ function NeverLose:CreateWindow(Config)
 
 	task.delay(0.25,function()
 		WindowFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-		Window:SetRender(true);
+		-- Respect Signal: do NOT force open (was causing empty menu before intro ended)
 		NeverLose:AddSignal(Window.Signal:Connect(LPH_NO_VIRTUALIZE(function(...)
 			Window:SetRender(...);
 		end)))
+		Window:SetRender(Window.Signal:GetValue());
 	end)
 
 	if NeverLose.EnabledBlur then

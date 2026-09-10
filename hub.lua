@@ -220,7 +220,7 @@ end
 local function AutoSave()
 end
 
-local menuOpen = true -- window starts open
+local menuOpen = false -- wait for intro
 local savedMouseBehavior = Enum.MouseBehavior.Default
 local savedMouseIcon = true
 
@@ -449,7 +449,8 @@ local function ForceLocalVisible()
 end
 
 
--- Intro: white "Neverlose" + two horizontal lines
+-- Intro: white "Neverlose" + two horizontal lines (UI opens only after this finishes)
+getgenv().NL_INTRO_DONE = false
 pcall(function()
     local guiParent = (gethui and gethui()) or CoreGui
     local introGui = Instance.new("ScreenGui")
@@ -469,6 +470,7 @@ pcall(function()
     label.TextSize = 32
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextTransparency = 1
+    label.ZIndex = 10
     label.Parent = introGui
 
     local left = Instance.new("Frame")
@@ -477,6 +479,7 @@ pcall(function()
     left.Size = UDim2.fromOffset(0, 2)
     left.BorderSizePixel = 0
     left.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    left.ZIndex = 10
     left.Parent = introGui
 
     local right = Instance.new("Frame")
@@ -485,16 +488,20 @@ pcall(function()
     right.Size = UDim2.fromOffset(0, 2)
     right.BorderSizePixel = 0
     right.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    right.ZIndex = 10
     right.Parent = introGui
 
-    TweenService:Create(label, TweenInfo.new(0.4, Enum.EasingStyle.Quad), { TextTransparency = 0 }):Play()
-    TweenService:Create(left, TweenInfo.new(0.55, Enum.EasingStyle.Quad), { Size = UDim2.fromOffset(140, 2) }):Play()
-    TweenService:Create(right, TweenInfo.new(0.55, Enum.EasingStyle.Quad), { Size = UDim2.fromOffset(140, 2) }):Play()
-    task.delay(1.4, function()
-        TweenService:Create(label, TweenInfo.new(0.35), { TextTransparency = 1 }):Play()
-        TweenService:Create(left, TweenInfo.new(0.35), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
-        TweenService:Create(right, TweenInfo.new(0.35), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
-        task.delay(0.4, function() pcall(function() introGui:Destroy() end) end)
+    TweenService:Create(label, TweenInfo.new(0.45, Enum.EasingStyle.Quad), { TextTransparency = 0 }):Play()
+    TweenService:Create(left, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Size = UDim2.fromOffset(140, 2) }):Play()
+    TweenService:Create(right, TweenInfo.new(0.6, Enum.EasingStyle.Quad), { Size = UDim2.fromOffset(140, 2) }):Play()
+    task.delay(1.5, function()
+        TweenService:Create(label, TweenInfo.new(0.4), { TextTransparency = 1 }):Play()
+        TweenService:Create(left, TweenInfo.new(0.4), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
+        TweenService:Create(right, TweenInfo.new(0.4), { BackgroundTransparency = 1, Size = UDim2.fromOffset(0, 2) }):Play()
+        task.delay(0.45, function()
+            pcall(function() introGui:Destroy() end)
+            getgenv().NL_INTRO_DONE = true
+        end)
     end)
 end)
 
@@ -1396,6 +1403,7 @@ menuOpen = false
 ApplyMenuMouse(false)
 pcall(function()
     if Window.Signal then Window.Signal:SetValue(false) end
+    if Window.SetRender then Window:SetRender(false) end
 end)
 
 local function storeKey(name)
@@ -1768,11 +1776,24 @@ if Config.LoopFOV then StartLoopFOV() end
 if Config.Freecam then StartFreecam() end
 ApplyWorld()
 RefreshChams()
--- Show UI only after intro animation finishes
+-- Show UI only after intro animation finishes (and controls are already created)
 task.spawn(function()
-    task.wait(1.85)
+    local t0 = os.clock()
+    while not getgenv().NL_INTRO_DONE and (os.clock() - t0) < 4 do
+        task.wait(0.05)
+    end
+    task.wait(0.1)
     pcall(function()
-        if Window and Window.Signal and not Window.Signal:GetValue() then
+        if not Window then return end
+        -- Force open via Signal so all controls receive SetRender(true)
+        if Window.Signal then
+            if not Window.Signal:GetValue() then
+                Window.Signal:SetValue(true)
+            end
+            if Window.SetRender then
+                Window:SetRender(true)
+            end
+        elseif Window.ToggleInterface then
             Window:ToggleInterface()
         end
     end)
