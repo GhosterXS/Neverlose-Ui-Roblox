@@ -63,6 +63,9 @@ local Config = {
     ESP_Healthbar = true,
     ESP_Tracers = true,
     ESP_Ball = true,
+    ESP_OOF = true,
+    ESP_OOF_Color = {255, 255, 255},
+    ESP_OOF_Size = 12,
     ESP_BallSize = 6,
     ESP_NameSize = 14,
     ESP_DistSize = 12,
@@ -179,7 +182,7 @@ end
 LoadConfig()
 
 local function AutoSave()
-    SaveConfig()
+    -- manual config only (Configs tab)
 end
 
 local menuOpen = true -- window starts open
@@ -687,26 +690,22 @@ local function StartAimbot()
         end
         local aimHeld = IsBindHeld(Config.Aimbot_AimKey)
         local wantAim = Config.Aimbot_Enabled and aimHeld
-        local wantSilent = Config.Aimbot_Silent
+        local wantSilent = Config.Aimbot_Silent and aimHeld
         if not wantAim and not wantSilent then return end
         local target = GetClosest()
         if not target then return end
         if wantSilent then
+            -- silent: snap camera look toward target while aim key is held
             pcall(function()
-                camera.CFrame = CFrame.new(camera.CFrame.Position, target.Position)
+                local origin = camera.CFrame.Position
+                camera.CFrame = CFrame.new(origin, target.Position)
             end)
+            -- also nudge mouse when available for tools that read mouse
+            if moveMouse then
+                pcall(function() MoveMouseToTarget(target) end)
+            end
         elseif wantAim then
             MoveMouseToTarget(target)
-        end
-        if aimHeld and false then -- rage removed
-            pcall(function()
-                VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-            end)
-            task.defer(function()
-                pcall(function()
-                    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-                end)
-            end)
         end
     end)
 end
@@ -850,35 +849,77 @@ local function UpdateESPDrawings()
                             }
                         end
                         local d = drawings[uid]
+                        if not d.OOF then
+                            d.OOF = CreateDrawing("Triangle")
+                        end
                         local screen, onScreen = camera:WorldToViewportPoint(hrp.Position)
                         local screenPos = Vector2.new(screen.X, screen.Y)
-                        if d.Ball and Config.ESP_Ball then
-                            d.Ball.Position = screenPos
-                            d.Ball.Radius = Config.ESP_BallSize
-                            d.Ball.Color = ballColor
-                            d.Ball.Filled = true
-                            d.Ball.NumSides = 16
-                            d.Ball.Visible = true
-                        elseif d.Ball then d.Ball.Visible = false end
+                        local showOnScreen = onScreen and screen.Z > 0
+                        if d.Ball then
+                            if showOnScreen and Config.ESP_Ball then
+                                d.Ball.Position = screenPos
+                                d.Ball.Radius = Config.ESP_BallSize
+                                d.Ball.Color = ballColor
+                                d.Ball.Filled = true
+                                d.Ball.NumSides = 16
+                                d.Ball.Visible = true
+                            else
+                                d.Ball.Visible = false
+                            end
+                        end
                         if d.Name then
-                            d.Name.Text = plr.DisplayName or plr.Name
-                            d.Name.Size = Config.ESP_NameSize
-                            d.Name.Color = nameColor
-                            d.Name.Center = true
-                            d.Name.Outline = true
-                            d.Name.OutlineColor = Color3.new(0, 0, 0)
-                            d.Name.Position = OffsetPos(screenPos, Config.ESP_NamePos, Config.ESP_BallSize + 16)
-                            d.Name.Visible = Config.ESP_Name
+                            if showOnScreen and Config.ESP_Name then
+                                d.Name.Text = plr.DisplayName or plr.Name
+                                d.Name.Size = Config.ESP_NameSize
+                                d.Name.Color = nameColor
+                                d.Name.Center = true
+                                d.Name.Outline = true
+                                d.Name.OutlineColor = Color3.new(0, 0, 0)
+                                d.Name.Position = OffsetPos(screenPos, Config.ESP_NamePos, Config.ESP_BallSize + 16)
+                                d.Name.Visible = true
+                            else
+                                d.Name.Visible = false
+                            end
                         end
                         if d.Dist then
-                            d.Dist.Text = math.floor(dist) .. "m"
-                            d.Dist.Size = Config.ESP_DistSize
-                            d.Dist.Color = distColor
-                            d.Dist.Center = true
-                            d.Dist.Outline = true
-                            d.Dist.OutlineColor = Color3.new(0, 0, 0)
-                            d.Dist.Position = OffsetPos(screenPos, Config.ESP_DistPos, Config.ESP_BallSize + 4)
-                            d.Dist.Visible = Config.ESP_Distance
+                            if showOnScreen and Config.ESP_Distance then
+                                d.Dist.Text = math.floor(dist) .. "m"
+                                d.Dist.Size = Config.ESP_DistSize
+                                d.Dist.Color = distColor
+                                d.Dist.Center = true
+                                d.Dist.Outline = true
+                                d.Dist.OutlineColor = Color3.new(0, 0, 0)
+                                d.Dist.Position = OffsetPos(screenPos, Config.ESP_DistPos, Config.ESP_BallSize + 4)
+                                d.Dist.Visible = true
+                            else
+                                d.Dist.Visible = false
+                            end
+                        end
+                        -- OOF arrow
+                        if d.OOF then
+                            if (not showOnScreen) and Config.ESP_OOF then
+                                local vp = camera.ViewportSize
+                                local cx, cy = vp.X / 2, vp.Y / 2
+                                local dir = Vector2.new(screen.X - cx, screen.Y - cy)
+                                if dir.Magnitude < 1 then dir = Vector2.new(0, -1) end
+                                dir = dir.Unit
+                                local radius = math.min(cx, cy) * 0.42
+                                local tip = Vector2.new(cx, cy) + dir * radius
+                                local side = Vector2.new(-dir.Y, dir.X)
+                                local size = Config.ESP_OOF_Size or 12
+                                local p1 = tip
+                                local p2 = tip - dir * size + side * (size * 0.55)
+                                local p3 = tip - dir * size - side * (size * 0.55)
+                                local oc = ToColor3(Config.ESP_OOF_Color or {255,255,255})
+                                d.OOF.PointA = p1
+                                d.OOF.PointB = p2
+                                d.OOF.PointC = p3
+                                d.OOF.Color = oc
+                                d.OOF.Filled = true
+                                d.OOF.Visible = true
+                            else
+                                d.OOF.Visible = false
+                            end
                         end
                         if onScreen and screen.Z > 0 and d.Health and hum then
                             local headScreen = camera:WorldToViewportPoint((head and head.Position or hrp.Position) + Vector3.new(0, 0.9, 0))
@@ -1356,13 +1397,14 @@ ApplyMenuMouse(true)
 
 local function storeKey(name)
     return function(v)
-        if type(v) == "string" and v ~= "" and v ~= "None" then
+        if v == "Escape" or v == "Esc" or v == Enum.KeyCode.Escape then
+            Config.Keys[name].Key = "None"
+        elseif type(v) == "string" and v ~= "" and v ~= "None" then
             Config.Keys[name].Key = v
             LastKeyFeature = name
         else
             Config.Keys[name].Key = "None"
         end
-        AutoSave()
     end
 end
 
@@ -1384,15 +1426,15 @@ end
 
 Window:AddTabLabel("MAIN")
 local LegitTab = Window:AddTab({ Icon = "crosshairs", Name = "Legit" })
-local AATab = Window:AddTab({ Icon = "reload", Name = "Anti-Aim" })
-local Visuals = Window:AddTab({ Icon = "eye", Name = "Visuals" })
+local AATab = Window:AddTab({ Icon = "arrow-spin-clockwise", Name = "AA" })
 local MoveTab = Window:AddTab({ Icon = "person", Name = "Movement" })
-local MiscTab = Window:AddTab({ Icon = "cube", Name = "Misc" })
+local SkinTab = Window:AddTab({ Icon = "user", Name = "Skin changer" })
+local Visuals = Window:AddTab({ Icon = "eye", Name = "Visuals" })
 local WorldTab = Window:AddTab({ Icon = "globe", Name = "World" })
-local SkinTab = Window:AddTab({ Icon = "user", Name = "Skins" })
+local MiscTab = Window:AddTab({ Icon = "cube", Name = "Misc" })
+local ConfigTab = Window:AddTab({ Icon = "gear", Name = "Configs" })
 
 local AimSec = LegitTab:AddSection({ Name = "AIMBOT", Position = "left" })
-local SilentSec = LegitTab:AddSection({ Name = "SILENT", Position = "right" })
 local AASec = AATab:AddSection({ Name = "ANTI-AIM", Position = "left" })
 local ESPSec = Visuals:AddSection({ Name = "ESP", Position = "left" })
 local ESPStyle = Visuals:AddSection({ Name = "ESP STYLE", Position = "right" })
@@ -1401,7 +1443,9 @@ local MoveSec = MoveTab:AddSection({ Name = "MOVEMENT", Position = "left" })
 local CamSec = MiscTab:AddSection({ Name = "CAMERA", Position = "left" })
 local EnvSec = WorldTab:AddSection({ Name = "LIGHTING", Position = "left" })
 local FxSec = WorldTab:AddSection({ Name = "EFFECTS", Position = "right" })
-local SkinSec = SkinTab:AddSection({ Name = "SKIN CHANGER", Position = "left" })
+local SkinCatSec = SkinTab:AddSection({ Name = "CATALOG", Position = "left" })
+local SkinBrowseSec = SkinTab:AddSection({ Name = "BROWSER", Position = "right" })
+local CfgSec = ConfigTab:AddSection({ Name = "CONFIGS", Position = "left" })
 
 
 local aimLabel = AimSec:AddLabel("Enabled")
@@ -1410,10 +1454,15 @@ AimSec:AddLabel("Aim Key"):AddKeybind({
     Default = Config.Aimbot_AimKey ~= "None" and Config.Aimbot_AimKey or "M2B",
     Flag = "Aimbot_AimKey",
     Callback = function(v)
-        Config.Aimbot_AimKey = (type(v) == "string" and v ~= "" and v) or "M2B"
-        AutoSave()
+        if v == "None" or v == "Escape" or v == "Esc" then
+            Config.Aimbot_AimKey = "None"
+        else
+            Config.Aimbot_AimKey = (type(v) == "string" and v ~= "" and v) or "M2B"
+        end
     end
 })
+local silentLabel = AimSec:AddLabel("Silent")
+bindFeature(silentLabel, "Silent", Config.Aimbot_Silent, "Aimbot_Silent")
 AimSec:AddLabel("Team Check"):AddToggle({
     Default = Config.Aimbot_TeamCheck, Flag = "Aimbot_TeamCheck",
     Callback = function(v) Config.Aimbot_TeamCheck = v AutoSave() end
@@ -1445,9 +1494,6 @@ AimSec:AddLabel("Aim Part"):AddDropdown({
     Default = Config.Aimbot_Part, Values = {"Head", "HumanoidRootPart", "UpperTorso"}, Flag = "Aimbot_Part",
     Callback = function(v) Config.Aimbot_Part = v AutoSave() end
 })
-
-local silentLabel = SilentSec:AddLabel("Silent Aim")
-bindFeature(silentLabel, "Silent", Config.Aimbot_Silent, "Aimbot_Silent")
 
 local aaLabel = AASec:AddLabel("Enabled")
 bindFeature(aaLabel, "AA", Config.AA_Enabled, "AA_Enabled")
@@ -1494,7 +1540,8 @@ ESPSec:AddLabel("Name"):AddToggle({ Default = Config.ESP_Name, Flag = "ESP_Name"
 ESPSec:AddLabel("Distance"):AddToggle({ Default = Config.ESP_Distance, Flag = "ESP_Distance", Callback = function(v) Config.ESP_Distance = v AutoSave() end })
 ESPSec:AddLabel("Healthbar"):AddToggle({ Default = Config.ESP_Healthbar, Flag = "ESP_Healthbar", Callback = function(v) Config.ESP_Healthbar = v AutoSave() end })
 ESPSec:AddLabel("Tracers"):AddToggle({ Default = Config.ESP_Tracers, Flag = "ESP_Tracers", Callback = function(v) Config.ESP_Tracers = v AutoSave() end })
-ESPSec:AddLabel("Ball"):AddToggle({ Default = Config.ESP_Ball, Flag = "ESP_Ball", Callback = function(v) Config.ESP_Ball = v AutoSave() end })
+ESPSec:AddLabel("Ball"):AddToggle({ Default = Config.ESP_Ball, Flag = "ESP_Ball", Callback = function(v) Config.ESP_Ball = v end })
+ESPSec:AddLabel("OOF Arrows"):AddToggle({ Default = Config.ESP_OOF ~= false, Flag = "ESP_OOF", Callback = function(v) Config.ESP_OOF = v end })
 ESPSec:AddLabel("Max Distance"):AddSlider({
     Min = 50, Max = 100000, Default = Config.ESP_MaxDistance, Flag = "ESP_MaxDistance",
     Callback = function(v) Config.ESP_MaxDistance = v AutoSave() end
@@ -1608,73 +1655,335 @@ FxSec:AddLabel("Atmosphere"):AddToggle({
 })
 FxSec:AddLabel("Atmosphere Density"):AddSlider({ Min = 0, Max = 1, Default = Config.AtmosphereDensity, Rounding = 2, Flag = "AtmoDensity", Callback = function(v) Config.AtmosphereDensity = v ApplyWorld() AutoSave() end })
 
-SkinSec:AddLabel("Username"):AddTextBox({
+
+-- ===================== Skin changer (catalog style) =====================
+local AvatarEditorService = game:GetService("AvatarEditorService")
+local InsertService = game:GetService("InsertService")
+
+local SkinState = {
+    Category = "Accessories",
+    Sub = "Head",
+    Query = "",
+    Sort = "Relevance",
+    Results = {},
+}
+
+local CATEGORIES = {
+    Accessories = {"Head", "Face", "Neck", "Shoulder", "Front", "Back", "Waist", "Hair"},
+    ["Body Parts"] = {"Head", "Torso", "Right Arm", "Left Arm", "Right Leg", "Left Leg"},
+    Clothing = {"Shirt", "Pants", "TShirt", "Face"},
+    Animations = {"Idle", "Walk", "Run", "Jump", "Fall", "Climb", "Swim"},
+}
+
+local SUB_TO_ASSET = {
+    Head = Enum.AvatarAssetType.Hat,
+    Face = Enum.AvatarAssetType.FaceAccessory,
+    Neck = Enum.AvatarAssetType.NeckAccessory,
+    Shoulder = Enum.AvatarAssetType.ShoulderAccessory,
+    Front = Enum.AvatarAssetType.FrontAccessory,
+    Back = Enum.AvatarAssetType.BackAccessory,
+    Waist = Enum.AvatarAssetType.WaistAccessory,
+    Hair = Enum.AvatarAssetType.HairAccessory,
+    Shirt = Enum.AvatarAssetType.Shirt,
+    Pants = Enum.AvatarAssetType.Pants,
+    TShirt = Enum.AvatarAssetType.TShirt,
+}
+
+local function getLocalHumanoidDescription()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return nil end
+    local ok, desc = pcall(function() return hum:GetAppliedDescription() end)
+    if ok and desc then return desc end
+    ok, desc = pcall(function() return Players:GetHumanoidDescriptionFromUserId(player.UserId) end)
+    if ok then return desc end
+    return nil
+end
+
+local function applyAccessoryId(assetId, sub)
+    assetId = tonumber(assetId)
+    if not assetId then return false, "bad id" end
+    local desc = getLocalHumanoidDescription()
+    if not desc then return false, "no description" end
+    local fieldMap = {
+        Head = "HatAccessory",
+        Face = "FaceAccessory",
+        Neck = "NeckAccessory",
+        Shoulder = "ShoulderAccessory",
+        Front = "FrontAccessory",
+        Back = "BackAccessory",
+        Waist = "WaistAccessory",
+        Hair = "HairAccessory",
+        Shirt = "Shirt",
+        Pants = "Pants",
+        TShirt = "GraphicTShirt",
+    }
+    local field = fieldMap[sub]
+    if field then
+        pcall(function()
+            if field == "Shirt" or field == "Pants" or field == "GraphicTShirt" then
+                desc[field] = assetId
+            else
+                -- accessories are comma-separated ids on description strings
+                local cur = tostring(desc[field] or "")
+                if cur == "" or cur == "0" then
+                    desc[field] = tostring(assetId)
+                else
+                    desc[field] = cur .. "," .. tostring(assetId)
+                end
+            end
+        end)
+    end
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function() hum:ApplyDescription(desc) end)
+        return true
+    end
+    return false, "no humanoid"
+end
+
+local function searchCatalog(query, sub)
+    local results = {}
+    local assetType = SUB_TO_ASSET[sub]
+    local ok, pages = pcall(function()
+        local params = CatalogSearchParams.new()
+        params.SearchKeyword = query or ""
+        params.Limit = 30
+        if assetType then
+            pcall(function() params.AssetTypes = { assetType } end)
+        end
+        pcall(function()
+            if SkinState.Sort == "MostFavorited" then
+                params.SortType = Enum.CatalogSortType.MostFavorited
+            elseif SkinState.Sort == "PriceHigh" then
+                params.SortType = Enum.CatalogSortType.PriceHighToLow
+            elseif SkinState.Sort == "PriceLow" then
+                params.SortType = Enum.CatalogSortType.PriceLowToHigh
+            else
+                params.SortType = Enum.CatalogSortType.Relevance
+            end
+        end)
+        return AvatarEditorService:SearchCatalog(params)
+    end)
+    if ok and pages then
+        local pageOk, items = pcall(function() return pages:GetCurrentPage() end)
+        if pageOk and type(items) == "table" then
+            for _, item in ipairs(items) do
+                table.insert(results, {
+                    Id = item.Id or item.AssetId,
+                    Name = item.Name or tostring(item.Id),
+                })
+            end
+        end
+    end
+    -- Fallback HTTP catalog
+    if #results == 0 then
+        pcall(function()
+            local q = HttpService:UrlEncode(query or "hat")
+            local url = "https://catalog.roblox.com/v1/search/items/details?Category=11&Limit=30&Keyword=" .. q
+            local body = game:HttpGet(url)
+            local data = HttpService:JSONDecode(body)
+            if data and data.data then
+                for _, item in ipairs(data.data) do
+                    table.insert(results, { Id = item.id, Name = item.name or tostring(item.id) })
+                end
+            end
+        end)
+    end
+    return results
+end
+
+-- Category buttons
+for catName, _ in pairs(CATEGORIES) do
+    SkinCatSec:AddButton({
+        Name = catName,
+        Callback = function()
+            SkinState.Category = catName
+            local subs = CATEGORIES[catName]
+            SkinState.Sub = subs[1]
+            pcall(function()
+                NeverLose:CreateNotification().new({
+                    Title = "Skin changer",
+                    Content = "Category: " .. catName,
+                    Duration = 2
+                })
+            end)
+        end
+    })
+end
+
+SkinCatSec:AddLabel("Subcategory tip: use Browser section buttons after picking a category")
+
+-- Sub buttons (all common)
+for _, sub in ipairs({"Head", "Face", "Neck", "Shoulder", "Front", "Back", "Waist", "Hair", "Shirt", "Pants", "TShirt"}) do
+    SkinBrowseSec:AddButton({
+        Name = "Sub: " .. sub,
+        Callback = function()
+            SkinState.Sub = sub
+            pcall(function()
+                NeverLose:CreateNotification().new({ Title = "Skin changer", Content = "Sub: " .. sub, Duration = 1.5 })
+            end)
+        end
+    })
+end
+
+SkinBrowseSec:AddLabel("Search"):AddTextBox({
+    Default = "",
+    Flag = "Skin_Search",
+    Callback = function(v) SkinState.Query = tostring(v or "") end
+})
+SkinBrowseSec:AddLabel("Sort"):AddDropdown({
+    Default = "Relevance",
+    Values = {"Relevance", "MostFavorited", "PriceLow", "PriceHigh"},
+    Flag = "Skin_Sort",
+    Callback = function(v) SkinState.Sort = v end
+})
+SkinBrowseSec:AddButton({
+    Name = "Search Catalog",
+    Callback = function()
+        local results = searchCatalog(SkinState.Query, SkinState.Sub)
+        SkinState.Results = results
+        local n = #results
+        pcall(function()
+            NeverLose:CreateNotification().new({
+                Title = "Skin changer",
+                Content = "Found " .. tostring(n) .. " items — applying first matches as buttons below may refresh next search",
+                Duration = 3
+            })
+        end)
+        for i = 1, math.min(8, n) do
+            local item = results[i]
+            SkinBrowseSec:AddButton({
+                Name = tostring(item.Name):sub(1, 28),
+                Callback = function()
+                    local ok, err = applyAccessoryId(item.Id, SkinState.Sub)
+                    pcall(function()
+                        NeverLose:CreateNotification().new({
+                            Title = "Skin changer",
+                            Content = ok and ("Applied " .. tostring(item.Name)) or tostring(err),
+                            Duration = 2
+                        })
+                    end)
+                end
+            })
+        end
+    end
+})
+
+SkinBrowseSec:AddLabel("Copy User"):AddTextBox({
     Default = Config.Skin_Username or "",
     Flag = "Skin_Username",
-    Callback = function(v)
-        Config.Skin_Username = tostring(v or "")
-        AutoSave()
-    end
+    Callback = function(v) Config.Skin_Username = tostring(v or "") end
 })
-SkinSec:AddLabel("UserId"):AddTextBox({
-    Default = tostring(Config.Skin_UserId or 0),
-    Flag = "Skin_UserId",
-    Callback = function(v)
-        Config.Skin_UserId = tonumber(v) or 0
-        AutoSave()
-    end
-})
-SkinSec:AddButton({
-    Name = "Apply Skin (Username)",
+SkinBrowseSec:AddButton({
+    Name = "Apply Full Avatar (Username)",
     Callback = function()
         local name = Config.Skin_Username
-        if not name or name == "" then
-            warn("[Skin] Empty username")
-            return
-        end
+        if not name or name == "" then return end
         local id = ResolveUsernameToId(name)
-        if not id then
-            warn("[Skin] Username not found")
-            return
-        end
+        if not id then return end
         Config.Skin_UserId = id
         local ok, msg = ApplySkinChanger(id)
         pcall(function()
             NeverLose:CreateNotification().new({
-                Title = "Skin Changer",
+                Title = "Skin changer",
                 Content = ok and ("Applied " .. name) or tostring(msg),
                 Duration = 3
             })
         end)
-        AutoSave()
     end
 })
-SkinSec:AddButton({
-    Name = "Apply Skin (UserId)",
-    Callback = function()
-        local ok, msg = ApplySkinChanger(Config.Skin_UserId)
-        pcall(function()
-            NeverLose:CreateNotification().new({
-                Title = "Skin Changer",
-                Content = ok and "Applied" or tostring(msg),
-                Duration = 3
-            })
-        end)
-    end
-})
-SkinSec:AddButton({
-    Name = "Apply Own Skin",
+SkinBrowseSec:AddButton({
+    Name = "Apply Own Avatar",
     Callback = function()
         local ok, msg = ApplySkinChanger(player.UserId)
         pcall(function()
             NeverLose:CreateNotification().new({
-                Title = "Skin Changer",
+                Title = "Skin changer",
                 Content = ok and "Own skin applied" or tostring(msg),
                 Duration = 3
             })
         end)
     end
 })
+
+-- ===================== Configs (manual) =====================
+local function ListConfigFiles()
+    local names = {}
+    pcall(function()
+        if isfolder and isfolder("NeverloseNL") then
+            for _, f in ipairs(listfiles("NeverloseNL")) do
+                local n = tostring(f):match("([^/\\]+)%.json$")
+                if n then table.insert(names, n) end
+            end
+        end
+    end)
+    return names
+end
+
+Config.ConfigName = Config.ConfigName or "default"
+
+CfgSec:AddLabel("Config Name"):AddTextBox({
+    Default = Config.ConfigName,
+    Flag = "ConfigName",
+    Callback = function(v) Config.ConfigName = tostring(v or "default") end
+})
+CfgSec:AddButton({
+    Name = "Save Config",
+    Callback = function()
+        local name = Config.ConfigName or "default"
+        pcall(function()
+            if makefolder then makefolder("NeverloseNL") end
+            local path = "NeverloseNL/" .. name .. ".json"
+            -- temporarily point SaveConfig path
+            local oldSave = SaveConfig
+            -- write using HttpService encode of Config
+            if writefile then
+                writefile(path, HttpService:JSONEncode(Config))
+            else
+                oldSave()
+            end
+        end)
+        pcall(function()
+            NeverLose:CreateNotification().new({ Title = "Configs", Content = "Saved " .. tostring(Config.ConfigName), Duration = 2 })
+        end)
+    end
+})
+CfgSec:AddButton({
+    Name = "Load Config",
+    Callback = function()
+        local name = Config.ConfigName or "default"
+        pcall(function()
+            local path = "NeverloseNL/" .. name .. ".json"
+            if readfile and isfile and isfile(path) then
+                local data = HttpService:JSONDecode(readfile(path))
+                if type(data) == "table" then
+                    for k, v in pairs(data) do Config[k] = v end
+                end
+            else
+                LoadConfig()
+            end
+        end)
+        pcall(function()
+            NeverLose:CreateNotification().new({ Title = "Configs", Content = "Loaded " .. tostring(Config.ConfigName), Duration = 2 })
+        end)
+    end
+})
+CfgSec:AddButton({
+    Name = "Delete Config",
+    Callback = function()
+        local name = Config.ConfigName or "default"
+        pcall(function()
+            local path = "NeverloseNL/" .. name .. ".json"
+            if delfile and isfile and isfile(path) then delfile(path) end
+        end)
+        pcall(function()
+            NeverLose:CreateNotification().new({ Title = "Configs", Content = "Deleted " .. tostring(name), Duration = 2 })
+        end)
+    end
+})
+
 
 FeatureState.AA = Config.AA_Enabled
 FeatureState.Aimbot = Config.Aimbot_Enabled

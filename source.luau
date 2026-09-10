@@ -1694,6 +1694,7 @@ NeverLose.KeyEnum = {
 	LeftAlt = "LAlt",
 	RightAlt = "RAlt",
 	Escape = "Esc",
+	None = "None",
 	M1B = "M1",
 	M2B = "M2",
 	M3B = "M3",
@@ -2516,7 +2517,9 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			while not Selected do
 				local Key = UserInputService.InputBegan:Wait();
 
-				if Key.KeyCode ~= Enum.KeyCode.Unknown and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
+				if Key.KeyCode == Enum.KeyCode.Escape then
+					Selected = "None";
+				elseif Key.KeyCode ~= Enum.KeyCode.Unknown and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
 					Selected = Key.KeyCode;
 				else
 					local uit = Key.UserInputType;
