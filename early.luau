@@ -994,7 +994,7 @@ NeverLose.ProcessParams = LPH_NO_VIRTUALIZE(function(self , Params , Fixed)
 	return k;
 end);
 
-NeverLose.EnabledBlur = true;
+NeverLose.EnabledBlur = false; -- disabled: was causing full-screen blur instead of menu
 NeverLose.BlurModuleParent = workspace.CurrentCamera;
 
 NeverLose.GetCalculatePosition = LPH_NO_VIRTUALIZE(function(planePos, planeNormal, rayOrigin, rayDirection)
@@ -3970,6 +3970,9 @@ function NeverLose:CreateWindow(Config)
 		if value then
 			WindowFrame.Visible = true
 			WindowFrame.Parent = NeverLose.ScreenGui
+			WindowFrame.BackgroundTransparency = (NeverLose.EnabledBlur and 0.055) or 0.0255
+			WindowFrame.Size = Window.Size
+			WindowFrame.Position = UDim2.fromScale(0.5, 0.5)
 			NeverLose.PlayAnimate(WindowFrame , SlowyTween , {
 				BackgroundTransparency = (NeverLose.EnabledBlur and 0.055) or 0.0255,
 				Size = Window.Size
@@ -4159,9 +4162,7 @@ function NeverLose:CreateWindow(Config)
 	WindowFrame.BackgroundTransparency = 1
 	Window:SetRender(false);
 
-	if NeverLose.EnabledBlur then
-		NeverLose:CreateBlurModule(WindowFrame,Window.Signal);
-	end;
+	-- Blur module disabled (caused full-screen blur without menu)
 
 	do
 		local Frame = Instance.new("Frame")

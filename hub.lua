@@ -51,6 +51,8 @@ do
     NeverLose = res
     pcall(function()
         NeverLose.UnloadEnabled = true
+        -- DepthOfField blur often shows without the window; disable it
+        NeverLose.EnabledBlur = false
         getgenv().NeverLose = NeverLose
     end)
 end
@@ -1976,31 +1978,53 @@ task.spawn(function()
 
     local function openUI()
         if not Window then return end
+
+        -- Kill any leftover DepthOfField from blur module
+        pcall(function()
+            for _, fx in ipairs(game:GetService("Lighting"):GetChildren()) do
+                if fx:IsA("DepthOfFieldEffect") then
+                    fx.Enabled = false
+                    fx:Destroy()
+                end
+            end
+        end)
+
         pcall(function()
             if NeverLose.ScreenGui then
                 NeverLose.ScreenGui.Enabled = true
             end
+            NeverLose.EnabledBlur = false
         end)
-        -- Use library toggle if currently closed
+
+        -- Open signal + render
         pcall(function()
-            if Window.Signal and not Window.Signal:GetValue() then
-                if Window.ToggleInterface then
-                    Window:ToggleInterface()
-                else
-                    Window.Signal:SetValue(true)
-                end
-            elseif Window.Signal then
+            if Window.Signal then
                 Window.Signal:SetValue(true)
             end
+            if Window.SetRender then
+                Window:SetRender(true)
+            end
         end)
+
+        -- Force main window frame visible (library may leave Parent=nil)
         pcall(function()
-            if Window.SetRender then Window:SetRender(true) end
+            local sg = NeverLose.ScreenGui
+            if not sg then return end
+            for _, child in ipairs(sg:GetChildren()) do
+                if child:IsA("Frame") and child.AbsoluteSize.X > 200 then
+                    child.Visible = true
+                    child.Parent = sg
+                    child.BackgroundTransparency = 0.03
+                    child.Position = UDim2.fromScale(0.5, 0.5)
+                    child.AnchorPoint = Vector2.new(0.5, 0.5)
+                end
+            end
         end)
-        -- Force-select first tab so section controls receive SetRender(true)
+
+        -- Select first tab so controls show
         pcall(function()
             if type(Window.Tabs) ~= "table" or #Window.Tabs == 0 then return end
-            local idx = Window.CurrentTab or 1
-            if idx < 1 or idx > #Window.Tabs then idx = 1 end
+            local idx = 1
             Window.CurrentTab = idx
             for i, tab in ipairs(Window.Tabs) do
                 if tab and tab.SetValue then
@@ -2008,6 +2032,7 @@ task.spawn(function()
                 end
             end
         end)
+
         menuOpen = true
         ApplyMenuMouse(true)
     end
