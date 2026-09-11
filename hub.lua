@@ -110,7 +110,15 @@ local function KillOldNeverlose()
             end)
             pcall(function()
                 if old.ScreenGui then
-                    old.ScreenGui:Destroy()
+                    pcall(function() old.ScreenGui:SetAttribute("NL_HUB_OLD", true) end)
+                    -- do not destroy if same as current
+                    local same = false
+                    pcall(function()
+                        if NeverLose and NeverLose.ScreenGui == old.ScreenGui then same = true end
+                    end)
+                    if not same then
+                        old.ScreenGui:Destroy()
+                    end
                 end
             end)
             pcall(function()
@@ -136,13 +144,20 @@ local function KillOldNeverlose()
                 for _, gui in ipairs(parent:GetChildren()) do
                     pcall(function()
                         if gui:IsA("ScreenGui") then
+                            -- NEVER destroy the active NeverLose ScreenGui
+                            local isActiveUI = false
+                            pcall(function()
+                                if NeverLose and NeverLose.ScreenGui and gui == NeverLose.ScreenGui then
+                                    isActiveUI = true
+                                end
+                            end)
+                            if isActiveUI then return end
                             local n = string.lower(tostring(gui.Name))
-                            if gui:GetAttribute("NL_HUB") == true
-                                or gui:GetAttribute("Neverlose") == true
+                            -- only destroy previous hub leftovers, not random UI names
+                            if gui:GetAttribute("NL_HUB_OLD") == true
                                 or string.find(n, "nl_intro", 1, true)
-                                or string.find(n, "neverlose", 1, true)
                                 or string.find(n, "nl_esp", 1, true)
-                                or string.find(n, "nl_", 1, true) then
+                                or string.find(n, "nl_keymodemenu", 1, true) then
                                 gui:Destroy()
                             end
                         end
@@ -1574,18 +1589,25 @@ do
     pcall(function()
         if NeverLose.ScreenGui then
             NeverLose.ScreenGui:SetAttribute("NL_HUB", true)
+            NeverLose.ScreenGui.Enabled = true
+            if not NeverLose.ScreenGui.Parent then
+                NeverLose.ScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
+            end
         end
     end)
 end
 
--- Gate: library auto-opens at 0.25s; block until intro finishes
+-- Gate: block auto-open until intro finishes
 getgenv().NL_ALLOW_UI = false
 do
     local rawSetRender = Window.SetRender
-    function Window:SetRender(value)
-        -- support both : and . call styles
-        if value == Window or typeof(value) == "table" then
-            -- mis-bound, ignore
+    Window.SetRender = function(a, b)
+        -- handle both Window:SetRender(v) and Window.SetRender(v)
+        local self, value
+        if typeof(a) == "table" and a.Signal ~= nil then
+            self, value = a, b
+        else
+            self, value = Window, a
         end
         if value == true and not getgenv().NL_ALLOW_UI then
             value = false
@@ -1596,7 +1618,7 @@ do
     end
     pcall(function()
         if Window.Signal then Window.Signal:SetValue(false) end
-        rawSetRender(Window, false)
+        pcall(function() rawSetRender(Window, false) end)
     end)
 end
 
@@ -1973,10 +1995,11 @@ getgenv().NL_WINDOW = Window
 -- Open menu ONLY after intro is done
 task.spawn(function()
     local t0 = os.clock()
-    while not getgenv().NL_INTRO_DONE and (os.clock() - t0) < 4 do
+    while not getgenv().NL_INTRO_DONE and (os.clock() - t0) < 3 do
         task.wait(0.05)
     end
-    task.wait(0.1)
+    getgenv().NL_INTRO_DONE = true
+    task.wait(0.05)
 
     getgenv().NL_ALLOW_UI = true
 
@@ -1988,53 +2011,64 @@ task.spawn(function()
 
     local function forceShow()
         if not Window then return end
+        getgenv().NL_ALLOW_UI = true
+
+        local sg = NeverLose and NeverLose.ScreenGui
+        if not sg or not sg.Parent then
+            pcall(function()
+                local parent = (gethui and gethui()) or (get_hidden_gui and get_hidden_gui()) or game:GetService("CoreGui")
+                if not sg then
+                    sg = Instance.new("ScreenGui")
+                    sg.Name = "NeverloseUI"
+                    sg.IgnoreGuiInset = true
+                    sg.ResetOnSpawn = false
+                    sg.ZIndexBehavior = Enum.ZIndexBehavior.Global
+                    NeverLose.ScreenGui = sg
+                end
+                sg.Parent = parent
+            end)
+            sg = NeverLose.ScreenGui
+        end
+        if sg then
+            sg.Enabled = true
+            pcall(function() sg.DisplayOrder = 1000 end)
+        end
 
         if Window.Signal then
             Window.Signal:SetValue(true)
         end
-        if Window.SetRender then
-            Window:SetRender(true)
-        end
-
-        local sg = NeverLose and NeverLose.ScreenGui
-        if sg then
-            sg.Enabled = true
-            pcall(function()
-                if not sg.Parent then
-                    sg.Parent = (gethui and gethui()) or game:GetService("CoreGui")
-                end
-            end)
-            for _, child in ipairs(sg:GetDescendants()) do
-                -- restore main window frame(s)
+        pcall(function()
+            if Window.SetRender then
+                Window.SetRender(Window, true)
             end
+        end)
+
+        if sg then
             for _, child in ipairs(sg:GetChildren()) do
                 if child:IsA("Frame") then
-                    local sz = child.AbsoluteSize
-                    -- main window is large
-                    if sz.X >= 300 or (child.Size.X.Offset and child.Size.X.Offset >= 300) then
+                    local ox = (child.Size and child.Size.X and child.Size.X.Offset) or 0
+                    local sx = (child.Size and child.Size.X and child.Size.X.Scale) or 0
+                    if ox >= 280 or sx >= 0.4 or child.AbsoluteSize.X >= 280 then
                         child.Visible = true
                         child.Parent = sg
                         child.AnchorPoint = Vector2.new(0.5, 0.5)
                         child.Position = UDim2.fromScale(0.5, 0.5)
-                        if child.BackgroundTransparency > 0.5 then
+                        if child.BackgroundTransparency > 0.4 then
                             child.BackgroundTransparency = 0.03
                         end
+                        pcall(function()
+                            if child.Size.X.Offset < 100 and child.Size.X.Scale == 0 then
+                                child.Size = (NeverLose.Scales and NeverLose.Scales.Default) or UDim2.fromOffset(640, 480)
+                            end
+                        end)
                     end
-                end
-            end
-        end
-
-        if type(Window.Tabs) == "table" then
-            local idx = Window.CurrentTab or 1
-            for i, tab in ipairs(Window.Tabs) do
-                if tab and tab.SetValue then
-                    tab.SetValue(i == idx)
                 end
             end
         end
 
         menuOpen = true
         ApplyMenuMouse(true)
+        print("[Neverlose] Menu forced open")
     end
 
     local ok, err = pcall(forceShow)
