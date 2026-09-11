@@ -186,7 +186,6 @@ GlobalWindow.Name = NeverLose.RandomString();
 GlobalWindow.IgnoreGuiInset = true;
 GlobalWindow.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 GlobalWindow.ResetOnSpawn = false;
-pcall(function() GlobalWindow:SetAttribute("NL_HUB", true) end);
 GlobalWindow.Parent = CoreGui;
 
 NeverLose.Scales = {
@@ -992,7 +991,7 @@ NeverLose.ProcessParams = LPH_NO_VIRTUALIZE(function(self , Params , Fixed)
 	return k;
 end);
 
-NeverLose.EnabledBlur = false;
+NeverLose.EnabledBlur = true;
 NeverLose.BlurModuleParent = workspace.CurrentCamera;
 
 NeverLose.GetCalculatePosition = LPH_NO_VIRTUALIZE(function(planePos, planeNormal, rayOrigin, rayDirection)
@@ -2512,9 +2511,7 @@ function NeverLose:RegisiterHandler(Handler: Frame , Signal)
 			while not Selected do
 				local Key = UserInputService.InputBegan:Wait();
 
-				if Key.KeyCode == Enum.KeyCode.Escape then
-					Selected = "None";
-				elseif Key.KeyCode ~= Enum.KeyCode.Unknown and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
+				if Key.KeyCode ~= Enum.KeyCode.Unknown and not IsBlacklist(Key.KeyCode) and not IsBlacklist(Key.KeyCode.Name) then
 					Selected = Key.KeyCode;
 				else
 					if Key.UserInputType == Enum.UserInputType.MouseButton1 and not IsBlacklist(Enum.UserInputType.MouseButton1) and not IsBlacklist("M1B") then
@@ -3954,21 +3951,11 @@ function NeverLose:CreateWindow(Config)
 
 	Window.SetRender = LPH_NO_VIRTUALIZE(function(self , value)
 		if value then
-			-- Force visible immediately (tween alone left UI "present but invisible")
-			WindowFrame.Visible = true
-			WindowFrame.Parent = NeverLose.ScreenGui
-			WindowFrame.Position = UDim2.fromScale(0.5, 0.5)
-			WindowFrame.Size = Window.Size
-			WindowFrame.BackgroundTransparency = 0.03
 			NeverLose.PlayAnimate(WindowFrame , SlowyTween , {
-				BackgroundTransparency = 0.03,
+				BackgroundTransparency = (NeverLose.EnabledBlur and 0.055) or 0.0255,
 				Size = Window.Size
 			})
 
-			LogoImage.ImageTransparency = 0
-			LogoImage.ImageTransparency = 0
-			WindowName.TextTransparency = 0
-			WindowContent.TextTransparency = 0.65
 			NeverLose.PlayAnimate(LogoImage , SlowyTween , {
 				ImageTransparency = 0
 			})
@@ -4152,7 +4139,9 @@ function NeverLose:CreateWindow(Config)
 		end)))
 	end)
 
-	-- blur disabled
+	if NeverLose.EnabledBlur then
+		NeverLose:CreateBlurModule(WindowFrame,Window.Signal);
+	end;
 
 	do
 		local Frame = Instance.new("Frame")
@@ -4404,9 +4393,6 @@ function NeverLose:CreateWindow(Config)
 
 	ConfigFrame.Name = NeverLose.RandomString();
 	ConfigFrame.Parent = RightHeader
-	ConfigFrame.Visible = false
-	ConfigFrame.Size = UDim2.fromOffset(0, 0)
-	ConfigFrame.BackgroundTransparency = 1
 	ConfigFrame.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigFrame.BackgroundColor3 = Color3.fromRGB(13, 17, 22)
 	ConfigFrame.BackgroundTransparency = 0.750
@@ -4425,7 +4411,6 @@ function NeverLose:CreateWindow(Config)
 
 	ConfigIcon.Name = NeverLose.RandomString();
 	ConfigIcon.Parent = ConfigFrame
-	ConfigIcon.Visible = false
 	ConfigIcon.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	ConfigIcon.BackgroundTransparency = 1.000
@@ -4452,7 +4437,6 @@ function NeverLose:CreateWindow(Config)
 
 	ConfigName.Name = NeverLose.RandomString();
 	ConfigName.Parent = ConfigFrame
-	ConfigName.Visible = false
 	ConfigName.AnchorPoint = Vector2.new(0, 0.5)
 	ConfigName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	ConfigName.BackgroundTransparency = 1.000
@@ -4470,7 +4454,6 @@ function NeverLose:CreateWindow(Config)
 
 	ConfigBthIcon.Name = NeverLose.RandomString();
 	ConfigBthIcon.Parent = ConfigFrame
-	ConfigBthIcon.Visible = false
 	ConfigBthIcon.AnchorPoint = Vector2.new(1, 0.5)
 	ConfigBthIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	ConfigBthIcon.BackgroundTransparency = 1.000
@@ -5854,7 +5837,7 @@ function NeverLose:CreateWindow(Config)
 		return ConfigLib;
 	end;
 
-	-- Window:_InitConfig(); -- top config menu removed
+	Window:_InitConfig();
 
 	local UserSettings = NeverLose:CreateOptionWindow(BottomFrame , BottomFrame.ZIndex + 13);
 	local reciveSignal;
